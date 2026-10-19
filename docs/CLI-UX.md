@@ -35,6 +35,13 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 | `-v` / `--verbose`, `-q` / `--quiet` | `SWEEP_VERBOSE` | verbosity |
 | `-h` / `--help`, `-V` / `--version` | – | clap-standard |
 
+> **M1 note — `--color <auto|always|never>` is documented but not implemented
+> yet.** The flag (`ColorChoice`, plan §2.6) is deferred to M-next: M1 ships
+> no such clap argument, so the row above is the v0.1 contract, not current
+> behavior. Color in M1 is controlled by `--no-color` / `NO_COLOR` /
+> `FORCE_COLOR` / `TERM=dumb` (resolved by `should_color()`, see
+> `docs/ARCHITECTURE.md` §7 and the env table in CLI-UX §7).
+
 Hidden internal: `--internal-system-pass <PLAN_PATH>` (documented in SAFETY §7).
 
 ---
@@ -75,6 +82,12 @@ Output mock (wide):
   reclaimable: 40.2 GiB · regular preset selects: 13.3 GiB · scanned in 4.1s
 ```
 Exit: 0 (always, unless error → 1).
+
+Notes:
+- Table rows may append a dim `(…)` note inside the category cell — age-gate / overlap
+  counts (`tmp & var-tmp  (1 newer than keep-days kept)`, `user caches  (excl. thumbnails)`).
+  M1's goldens show the 4-rule output (tmp & var-tmp, user caches, thumbnails, trash).
+- `-v` adds per-rule detail lines after the table.
 
 ### 2.2 `sweep clean`
 **Purpose:** the main flow — scan → select → gate → execute → report.
@@ -282,6 +295,7 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 | not a TTY in interactive mode | `error: interactive mode requires a TTY; use --preset/--only with --yes` |
 | unknown rule id | `error: unknown rule 'bogus' — did you mean 'trash'?` (1) |
 | unknown preset | `error: invalid preset 'mega' (expected: safe, regular, full)` (1) |
+| invalid SWEEP_KEEP_DAYS | `error: invalid SWEEP_KEEP_DAYS 'abc' (expected a non-negative integer)` (1) |
 | config parse error | `error: config ~/.config/sweep/config.toml:12: invalid tier 'hot' (expected safe/caution/destructive)` (1) |
 | config unknown rule key | `error: config: unknown rule section [rules.pacman] — did you mean [rules.pacman-cache]?` (1) |
 | lock held | `error: another sweep is running (pid 1234, since 14:02)` (1) |

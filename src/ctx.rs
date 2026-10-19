@@ -76,7 +76,7 @@ impl GlobalFlags {
                         _ => {
                             return Err(CtxError::Flags(format!(
                                 "invalid preset '{v}' (expected: safe, regular, full)"
-                            )))
+                            )));
                         }
                     }
                 }
@@ -84,9 +84,7 @@ impl GlobalFlags {
             },
         };
 
-        let env_flag = |key: &str| {
-            std::env::var_os(key).is_some_and(|v| !v.is_empty())
-        };
+        let env_flag = |key: &str| std::env::var_os(key).is_some_and(|v| !v.is_empty());
 
         let trash = root.trash || env_flag("SWEEP_TRASH");
         let yes = root.yes || env_flag("SWEEP_YES");
@@ -171,7 +169,12 @@ impl Ctx {
         let flags = GlobalFlags::from_root(root)?;
         let config_path = match std::env::var_os("SWEEP_CONFIG") {
             Some(v) if !v.is_empty() => Some(PathBuf::from(v)),
-            _ => config::default_path(),
+            // Default path: absent file ⇒ the "defaults-only path"
+            // (`load_from(None)`); only an EXPLICIT SWEEP_CONFIG that is
+            // missing is an error (`ConfigError::Missing`). Takes `home` so
+            // a SWEEP_HOME sandbox resolves to ITS config, never the
+            // developer's real one (AGENTS invariant 4).
+            _ => config::default_path(&home).filter(|p| p.exists()),
         };
         let config = config::load_from(config_path.as_deref())?;
         let system = SystemCtx::detect().map_err(|e| CtxError::System(e.to_string()))?;
@@ -212,14 +215,14 @@ impl Ctx {
     }
 
     pub fn effective_preset(&self) -> Preset {
-        self.flags.preset.unwrap_or_else(|| {
-            match self.config.general.preset.as_str() {
+        self.flags
+            .preset
+            .unwrap_or(match self.config.general.preset.as_str() {
                 "safe" => Preset::Safe,
                 "full" => Preset::Full,
                 // validated at config load; default "regular"
                 _ => Preset::Regular,
-            }
-        })
+            })
     }
 
     pub fn preset_name(&self) -> &'static str {
@@ -231,7 +234,9 @@ impl Ctx {
     }
 
     pub fn keep_days(&self) -> u32 {
-        self.flags.keep_days.unwrap_or(self.config.general.keep_days)
+        self.flags
+            .keep_days
+            .unwrap_or(self.config.general.keep_days)
     }
 }
 
@@ -244,7 +249,10 @@ mod tests {
         let home = PathBuf::from("/tmp/sweep-ctx-test-home");
         let ctx = Ctx::for_test(home.clone());
         assert_eq!(ctx.home, home);
-        assert_eq!(ctx.tmp_roots, vec![home.join(".fake-tmp"), home.join(".fake-var-tmp")]);
+        assert_eq!(
+            ctx.tmp_roots,
+            vec![home.join(".fake-tmp"), home.join(".fake-var-tmp")]
+        );
         assert_eq!(ctx.run_id, "19700101T000000");
         assert_eq!(ctx.flags.keep_days, None);
         assert!(ctx.flags.unicode);

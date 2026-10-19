@@ -8,7 +8,9 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 `~/Downloads`) demands you type `PURGE` per category — on purpose.
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
-> what works today. Core commands land milestone by milestone.
+> what works today. **`sweep scan` works** (M1: read-only measurement, table +
+> `--json`); `clean`, `top`, `history`, `doctor` are still milestone stubs.
+> Core commands land milestone by milestone.
 
 ## Why
 

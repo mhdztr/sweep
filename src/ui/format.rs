@@ -36,7 +36,9 @@ pub fn format_bytes(bytes: u64) -> String {
 /// `<60 s` → `"{s}s"`; `<48 h` → `"{h}h"` (at least 1h — anything past a
 /// minute reads as hours); else `"{d}d"`; `None` → `"never"`.
 pub fn format_age(age: Option<Duration>) -> String {
-    let Some(d) = age else { return "never".to_string() };
+    let Some(d) = age else {
+        return "never".to_string();
+    };
     let secs = d.as_secs();
     if secs < 60 {
         format!("{secs}s")
@@ -62,8 +64,14 @@ mod tests {
         assert_eq!(format_bytes(1_288_490_188), "1.2 GiB");
         // Promote on rounding: 1023.94 KiB → 1 MiB.
         assert_eq!(format_bytes(1_048_574), "1 MiB");
-        assert_eq!(format_bytes(148 * 1024 * 1024 * 1024 + 214_748_365), "148.2 GiB");
-        assert_eq!(format_bytes(40 * 1024 * 1024 * 1024 + 214_748_365), "40.2 GiB");
+        assert_eq!(
+            format_bytes(148 * 1024 * 1024 * 1024 + 214_748_365),
+            "148.2 GiB"
+        );
+        assert_eq!(
+            format_bytes(40 * 1024 * 1024 * 1024 + 214_748_365),
+            "40.2 GiB"
+        );
     }
 
     #[test]

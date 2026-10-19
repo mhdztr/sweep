@@ -67,7 +67,7 @@ unchecked) · 🟥 `destructive` (`full` preset only, typed `PURGE`) · 📋 rep
 - **Guard:** none. **Sudo:** no (falls back to skipping unreadable root-owned entries
   with `skipped{not readable}` — never escalates silently).
 - **Config:** `[rules.tmp] enabled`, `[general] keep_days`.
-- **Preview copy:** `1.2 GiB · 4,211 files · oldest 12d · newest 3h (37 newer than keep-days kept)`.
+- **Preview copy:** `1.2 GiB · 4,211 files · oldest 12d · newest 2d (37 newer than keep-days kept)`.
 - **Tests:** protected entries survive (seed socket + `systemd-private-x` dir); age
   gate counts exact; symlink into `~/` not followed; open-fd file skipped.
 

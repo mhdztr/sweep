@@ -10,11 +10,11 @@ use crate::rules::Tier;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, SystemTime};
 use walker::SkipKind;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ScanInfo {
     pub bytes: u64,
     pub files: u64,
@@ -26,19 +26,6 @@ pub struct ScanInfo {
     /// e.g. "1 newer than keep-days kept" | "(excl. thumbnails)" — human
     /// table only (parenthesization happens in the renderer).
     pub note: Option<String>,
-}
-
-impl Default for ScanInfo {
-    fn default() -> Self {
-        Self {
-            bytes: 0,
-            files: 0,
-            dirs: 0,
-            newest_age: None,
-            samples: Vec::new(),
-            note: None,
-        }
-    }
 }
 
 impl ScanInfo {
@@ -186,6 +173,12 @@ pub fn run(
         }
     }
 
+    // `RuleDone` total = rules that will actually RUN. NotApplicable rules
+    // never emit RuleDone, so the registry length would pin the spinner at
+    // e.g. `3/4 rules` until it clears (critic finding); the spinner takes
+    // its length from this field, not from its spawn-time registry guess.
+    let ready_total = ready.iter().filter(|r| r.is_some()).count();
+
     // Scan phase: one scoped thread per Ready rule (consumers never block
     // pool workers — no jwalk busy-deadlock). Results collected indexed by
     // registry position: parallel completion, deterministic output order.
@@ -195,14 +188,11 @@ pub fn run(
             .iter()
             .zip(results.iter())
             .map(|(rule_slot, _result_slot)| {
-                let Some(rule) = rule_slot.as_ref() else {
-                    return None;
-                };
+                let rule = rule_slot.as_ref()?;
                 // Ready rules have a `None` results slot until assembly
                 // fills it — take the id from the rule itself.
                 let id = rule.id();
                 let svc = &svc;
-                let ctx = ctx;
                 let done_counter = &done_counter;
                 Some(scope.spawn(move || {
                     let r = rule.scan(ctx, svc).map_err(|e| e.to_string());
@@ -211,7 +201,7 @@ pub fn run(
                         let _ = tx.send(ScanEvent::RuleDone {
                             id,
                             done: done as usize,
-                            total: total_rules,
+                            total: ready_total,
                         });
                     }
                     r
@@ -220,7 +210,13 @@ pub fn run(
             .collect();
         handles
             .into_iter()
-            .map(|h| h.map(|handle| handle.join().unwrap_or_else(|_| Err("rule panicked".to_string()))))
+            .map(|h| {
+                h.map(|handle| {
+                    handle
+                        .join()
+                        .unwrap_or_else(|_| Err("rule panicked".to_string()))
+                })
+            })
             .collect()
     });
 
@@ -275,20 +271,24 @@ pub fn run(
         .iter()
         .find(|r| r.id == "thumbnails")
         .map(|r| (r.applied, r.info.bytes, r.info.files, r.info.dirs));
-    if let Some(uc) = results.iter_mut().find(|r| r.id == "user-cache") {
-        if let Some((true, tb, tf, td)) = thumbs {
-            uc.info.bytes = uc.info.bytes.saturating_sub(tb);
-            uc.info.files = uc.info.files.saturating_sub(tf);
-            uc.info.dirs = uc.info.dirs.saturating_sub(td);
-            uc.net_of = vec!["thumbnails"];
-            uc.info.note = Some("(excl. thumbnails)".to_string());
-        }
+    if let Some(uc) = results.iter_mut().find(|r| r.id == "user-cache")
+        && let Some((true, tb, tf, td)) = thumbs
+    {
+        uc.info.bytes = uc.info.bytes.saturating_sub(tb);
+        uc.info.files = uc.info.files.saturating_sub(tf);
+        uc.info.dirs = uc.info.dirs.saturating_sub(td);
+        uc.net_of = vec!["thumbnails"];
+        uc.info.note = Some("(excl. thumbnails)".to_string());
     }
 
     // Totals: reclaimable = Σ applied bytes (already net of overlaps);
     // regular = Σ applied Safe bytes (config-preset includes arrive M3 —
     // identical to reclaimable in M1).
-    let reclaimable_bytes: u64 = results.iter().filter(|r| r.applied).map(|r| r.info.bytes).sum();
+    let reclaimable_bytes: u64 = results
+        .iter()
+        .filter(|r| r.applied)
+        .map(|r| r.info.bytes)
+        .sum();
     let regular_bytes: u64 = results
         .iter()
         .filter(|r| r.applied && r.tier == Tier::Safe)

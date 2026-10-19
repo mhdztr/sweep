@@ -5,15 +5,15 @@ mod common;
 
 use common::{scan_fixture, seed};
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, SystemTime};
 use sweep::ctx::Ctx;
 use sweep::rules::cache::{ThumbnailsRule, UserCacheRule};
 use sweep::rules::tmp::TmpRule;
 use sweep::rules::{Detect, Rule};
-use sweep::scan::walker::SkipKind;
 use sweep::scan::ScanService;
+use sweep::scan::walker::SkipKind;
 
 /// Age-relative file time: `secs` before now.
 fn ft_age(secs: u64) -> filetime::FileTime {
@@ -62,8 +62,7 @@ fn tmp_protected_survive_dirs_sockets_fifos_and_lockfiles() {
     std::fs::create_dir_all(root.join("systemd-private-x/run")).expect("mkdir");
     std::fs::write(root.join("systemd-private-x/run/file"), vec![0u8; 999]).expect("write");
     std::fs::create_dir_all(root.join("X11-unix")).expect("mkdir");
-    let _sock =
-        std::os::unix::net::UnixListener::bind(root.join("dbus-123")).expect("bind socket");
+    let _sock = std::os::unix::net::UnixListener::bind(root.join("dbus-123")).expect("bind socket");
     mkfifo(&root.join("plain.fifo"));
     std::fs::write(root.join(".X123-lock"), b"lock").expect("write");
 
@@ -213,7 +212,12 @@ fn trash_counts_files_and_info_dirs_only() {
     let home = tmp.path();
     scan_fixture(home);
     // Sibling of Trash/ — outside both roots, contributes nothing.
-    seed(home, ".local/share/not-trash/sibling.bin", 4_096, ft_age(10 * 86_400));
+    seed(
+        home,
+        ".local/share/not-trash/sibling.bin",
+        4_096,
+        ft_age(10 * 86_400),
+    );
 
     let scan = sweep::rules::trash::TrashRule
         .scan(&ctx_for(home), &svc())
@@ -316,4 +320,45 @@ fn detect_disabled_in_config() {
         UserCacheRule.detect(&ctx),
         Detect::NotApplicable { ref reason } if reason == "disabled in config"
     ));
+}
+
+#[test]
+fn thumbnails_detect_reason_names_the_thumbnails_dir() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let home = tmp.path();
+    // `~/.cache` EXISTS but the rule's ROOT `~/.cache/thumbnails` does not —
+    // the reason must name the missing root, not its present parent (critic
+    // finding: "~/.cache not found" was factually wrong here).
+    std::fs::create_dir_all(home.join(".cache")).expect("mkdir .cache");
+    let ctx = ctx_for(home);
+
+    assert!(matches!(
+        ThumbnailsRule.detect(&ctx),
+        Detect::NotApplicable { ref reason } if reason == "~/.cache/thumbnails not found"
+    ));
+
+    // The copy the table/JSON shows comes from the same detect() reason.
+    let out = sweep::scan::run(&ctx, Arc::new(AtomicBool::new(false)), None);
+    let th = out
+        .results
+        .iter()
+        .find(|r| r.id == "thumbnails")
+        .expect("thumbnails row present");
+    assert!(!th.applied);
+    assert_eq!(th.reason.as_deref(), Some("~/.cache/thumbnails not found"));
+}
+
+#[test]
+fn tmp_location_is_the_primary_root_through_display_path() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let ctx = ctx_for(tmp.path());
+
+    // Plan §2.10 "location `/tmp`" + Rule trait "display_path": ONE primary
+    // root, rendered relative to home in a sandbox — never the joined
+    // non-spec "~/.fake-tmp, ~/.fake-var-tmp" string the goldens used to
+    // pin (critic blocker 1). On a real host the same call yields "/tmp".
+    assert_eq!(TmpRule.location(&ctx), "~/.fake-tmp");
+    // Same convention as the other rules.
+    assert_eq!(UserCacheRule.location(&ctx), "~/.cache");
+    assert_eq!(ThumbnailsRule.location(&ctx), "~/.cache");
 }

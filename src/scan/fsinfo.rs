@@ -22,8 +22,8 @@ pub fn statvfs_totals(path: &Path) -> std::io::Result<(u64, u64)> {
     if rc != 0 {
         return Err(std::io::Error::last_os_error());
     }
-    let total = st.f_blocks as u64 * st.f_frsize as u64;
-    let avail = st.f_bavail as u64 * st.f_frsize as u64;
+    let total = st.f_blocks * st.f_frsize;
+    let avail = st.f_bavail * st.f_frsize;
     Ok((total, total.saturating_sub(avail)))
 }
 
@@ -36,7 +36,9 @@ pub fn root_fstype() -> std::io::Result<String> {
     if let Ok(s) = fstype_from("/proc/mounts", false) {
         return Ok(s);
     }
-    Err(std::io::Error::other("cannot determine root filesystem type"))
+    Err(std::io::Error::other(
+        "cannot determine root filesystem type",
+    ))
 }
 
 /// mountinfo: `… - <fstype> <source> …` (separator `-`); mounts: `<device>
@@ -70,7 +72,9 @@ fn fstype_from(path: &str, mountinfo: bool) -> std::io::Result<String> {
 
 /// Kernel hostname (no unsafe, no dep).
 pub fn hostname() -> std::io::Result<String> {
-    Ok(std::fs::read_to_string("/proc/sys/kernel/hostname")?.trim().to_string())
+    Ok(std::fs::read_to_string("/proc/sys/kernel/hostname")?
+        .trim()
+        .to_string())
 }
 
 #[cfg(test)]

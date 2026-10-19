@@ -10,7 +10,7 @@ use std::ffi::OsString;
 use std::os::unix::fs::{FileTypeExt as _, MetadataExt as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -176,7 +176,10 @@ pub enum ScanError {
     #[error("{0}: not found")]
     Missing(PathBuf),
     #[error("{path}: {source}")]
-    Io { path: PathBuf, source: std::io::Error },
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("directory walk busy (pool saturated) — {0}")]
     Busy(String),
 }
@@ -210,7 +213,10 @@ impl SkipCounters {
             (SkipKind::Protected, self.protected.load(Ordering::Relaxed)),
             (SkipKind::Hot, self.hot.load(Ordering::Relaxed)),
             (SkipKind::Whitelist, self.whitelist.load(Ordering::Relaxed)),
-            (SkipKind::MountBound, self.mount_bound.load(Ordering::Relaxed)),
+            (
+                SkipKind::MountBound,
+                self.mount_bound.load(Ordering::Relaxed),
+            ),
             (SkipKind::KeptNewer, self.kept_newer.load(Ordering::Relaxed)),
         ] {
             if v > 0 {
@@ -285,7 +291,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
                 let Ok(entry) = child else {
                     return true; // Err entries kept; counted as errors at consume
                 };
-                let depth = entry.depth as usize; // children of root ⇒ 1
+                let depth = entry.depth; // children of root ⇒ 1
                 // LOAD-BEARING depth check: process_read_dir also runs once
                 // at into_iter() time over the root entry (depth 0); prune
                 // and mount checks must never remove the root (D-10 seam:
@@ -299,7 +305,22 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
                     ),
                     Err(_) => {
                         stat_errors_cb.fetch_add(1, Ordering::Relaxed);
-                        (None, None, 0) // TOCTOU/perm: entry skipped, not fatal
+                        if depth > 0 {
+                            // **Deviation from the plan's literal snippet**
+                            // (which returned `(None, None, 0)` and let the
+                            // consumer count a fabricated 0-byte FILE): a
+                            // non-root entry we cannot lstat (EACCES on a
+                            // list-only parent, TOCTOU deletion) has no
+                            // measurable size/age/mtime, so a later `clean`
+                            // could not verify it either — drop it instead of
+                            // inflating `files` (honesty: counts reflect what
+                            // a clean could reclaim). Still counted once in
+                            // `stats.errors` above.
+                            return false;
+                        }
+                        // Root is exempt: walk() lstat'ed it before iterating;
+                        // losing it here would break depth-0 counting.
+                        (None, None, 0) // TOCTOU/perm: root only
                     }
                 };
                 let info = EntryInfo {
@@ -378,7 +399,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         let info = match entry.client_state.take() {
             Some(si) => EntryInfo {
                 name: entry.file_name.clone(),
-                depth: entry.depth as usize,
+                depth: entry.depth,
                 kind: kind_of(&entry.file_type()),
                 mtime: (si.mtime_unix != 0)
                     .then(|| SystemTime::UNIX_EPOCH + Duration::from_secs(si.mtime_unix as u64)),
@@ -388,10 +409,14 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
             None => match std::fs::symlink_metadata(entry.path()) {
                 Ok(m) => EntryInfo {
                     name: entry.file_name.clone(),
-                    depth: entry.depth as usize,
+                    depth: entry.depth,
                     kind: kind_of(&m.file_type()),
                     mtime: m.modified().ok(),
-                    len: if m.file_type().is_symlink() { 0 } else { m.len() },
+                    len: if m.file_type().is_symlink() {
+                        0
+                    } else {
+                        m.len()
+                    },
                     dev: Some(m.dev()),
                 },
                 Err(_) => {
@@ -405,11 +430,11 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
             // Gate (newer-than-cutoff logic lives in the rule's closure, not
             // here). A gated dir would still be descended if one ever
             // occurred — gates are documented as non-dir-only.
-            if let Some(gate) = &opts.gate {
-                if let Err(kind) = gate(&entry.path(), &info) {
-                    skipped.bump(kind);
-                    continue;
-                }
+            if let Some(gate) = &opts.gate
+                && let Err(kind) = gate(&entry.path(), &info)
+            {
+                skipped.bump(kind);
+                continue;
             }
         }
 
@@ -433,13 +458,13 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         if info.depth > 0 && stats.samples.len() < opts.max_samples {
             stats.samples.push(entry.path());
         }
-        if counted % 256 == 0 {
-            if let Some(tx) = &opts.progress {
-                let _ = tx.send(ScanEvent::Walk {
-                    dirs: stats.dirs,
-                    bytes: stats.bytes,
-                });
-            }
+        if counted.is_multiple_of(256)
+            && let Some(tx) = &opts.progress
+        {
+            let _ = tx.send(ScanEvent::Walk {
+                dirs: stats.dirs,
+                bytes: stats.bytes,
+            });
         }
     }
 

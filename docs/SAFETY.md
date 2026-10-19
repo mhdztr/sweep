@@ -18,7 +18,7 @@ This document is normative: if code contradicts it, code is wrong.
 | T5 | **Stale/tampered sudo plan** — a crafted plan file escalates deletions | plan JSON carries schema version + HMAC-ish checksum (sha256 of canonical plan + uid + run_id written by parent; child re-verifies), child re-runs `detect()` per rule, child re-validates gate acks; plan file in `state/tmp` with 0600, deleted after |
 | T6 | **Silent partial failure** — half-cleaning reported as success | continue-on-error + exit 3 + summary always lists errors/skips |
 | T7 | **Config tricks** — user custom rule points at `/etc` or `~` root | custom rule validation: expanded path must be ≠ home/root, not under `/etc,/usr,/boot,/var/lib`; destructive custom still needs PURGE gate |
-| T8 | **Two sweeps at once** corrupting state or racing deletes | `flock` single-instance lock (`state/sweep.lock`); second instance exits 1 with pid info |
+| T8 | **Two sweeps at once** corrupting state or racing deletes | `flock` single-instance lock for **mutating runs only** (`state/sweep.lock`); second mutating instance exits 1 with pid info |
 | T9 | **Low disk / read-only state** mid-run | log/history write failures degrade to warnings (never abort clean); trash mode pre-checks free space |
 | T10 | **Running-app corruption** (browser/editor/docker in use) | process guards at detect + execution; docker list-first; volume sub-gate typed word |
 | T11 | **Destructive-with-`--yes` confusion in CI** | tested behavior: exits 2 with actionable message; `--json` requires non-interactive flow |
@@ -166,7 +166,8 @@ duration_ms, dry_run. Pruned to `history_keep_runs` (100).
 
 ## 10. Concurrency & environment hardening
 
-- Single-instance `flock` for entire run (scan through history write).
+- Single-instance `flock` for every **mutating** run (clean start through history
+  write); read-only commands never take or create the lock.
 - Plans/logs written via temp + rename; state dir 0700.
 - External commands: argv arrays only (never `sh -c`), `Command::env_clear`-ish
   minimal env for sudo pass, PATH resolved once at startup and recorded.

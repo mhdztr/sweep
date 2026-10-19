@@ -1,0 +1,16 @@
+---
+source: tests/scan_golden.rs
+expression: "render(50, Theme { color: false, unicode: true })"
+---
+sweep 0.1.0 · storage cleaner
+root: 1 TiB total · 512 GiB used · 20.1 KiB recla…
+
+  🟩 safe  tmp & var-tmp
+    3.2 KiB · 2 files
+  🟩 safe  user caches
+    9.8 KiB · 2 files
+  🟩 safe  thumbnails
+    5 KiB · 2 files
+  🟩 safe  trash
+    2.1 KiB · 2 files
+reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s

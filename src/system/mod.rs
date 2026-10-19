@@ -47,8 +47,7 @@ impl SystemCtx {
     pub fn detect() -> anyhow::Result<Self> {
         let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
         let id = os_release_key(&os_release, "ID").unwrap_or_else(|| "unknown".to_string());
-        let name =
-            os_release_key(&os_release, "NAME").unwrap_or_else(|| "unknown".to_string());
+        let name = os_release_key(&os_release, "NAME").unwrap_or_else(|| "unknown".to_string());
         let id_like = os_release_key(&os_release, "ID_LIKE").unwrap_or_default();
         let family = classify(&id, &id_like);
         let pkgman = match family {
@@ -61,8 +60,8 @@ impl SystemCtx {
         .map(str::to_string);
         let hostname = fsinfo::hostname().unwrap_or_else(|_| "unknown".to_string());
         let fstype = fsinfo::root_fstype().unwrap_or_else(|_| "unknown".to_string());
-        let (root_total, root_used) = fsinfo::statvfs_totals(std::path::Path::new("/"))
-            .unwrap_or((0, 0));
+        let (root_total, root_used) =
+            fsinfo::statvfs_totals(std::path::Path::new("/")).unwrap_or((0, 0));
         Ok(Self {
             distro_id: id,
             distro_name: name,
@@ -85,22 +84,22 @@ impl SystemCtx {
             hostname: "testhost".to_string(),
             fstype: "ext4".to_string(),
             root_total: 1_099_511_627_776, // 1 TiB
-            root_used: 549_755_813_888,   // 512 GiB
+            root_used: 549_755_813_888,    // 512 GiB
         }
     }
 }
 
 fn os_release_key(text: &str, key: &str) -> Option<String> {
     for line in text.lines() {
-        if let Some(rest) = line.strip_prefix(key) {
-            if let Some(value) = rest.strip_prefix('=') {
-                let unquoted = value
-                    .trim_start_matches('"')
-                    .trim_end_matches('"')
-                    .trim_start_matches('\'')
-                    .trim_end_matches('\'');
-                return Some(unquoted.to_string());
-            }
+        if let Some(rest) = line.strip_prefix(key)
+            && let Some(value) = rest.strip_prefix('=')
+        {
+            let unquoted = value
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .trim_start_matches('\'')
+                .trim_end_matches('\'');
+            return Some(unquoted.to_string());
         }
     }
     None
@@ -111,16 +110,16 @@ fn classify(id: &str, id_like: &str) -> DistroFamily {
     for token in id.split_whitespace().chain(id_like.split_whitespace()) {
         match token {
             "arch" | "archlinux" | "manjaro" | "endeavouros" | "artix" => {
-                return DistroFamily::Arch
+                return DistroFamily::Arch;
             }
             "debian" | "ubuntu" | "linuxmint" | "pop" | "raspbian" | "kali" => {
-                return DistroFamily::Debian
+                return DistroFamily::Debian;
             }
             "fedora" | "rhel" | "centos" | "rocky" | "almalinux" | "nobara" => {
-                return DistroFamily::Fedora
+                return DistroFamily::Fedora;
             }
             "suse" | "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" | "sled" => {
-                return DistroFamily::Suse
+                return DistroFamily::Suse;
             }
             _ => {}
         }
@@ -152,8 +151,14 @@ mod tests {
         assert_eq!(classify("ubuntu", "debian"), DistroFamily::Debian);
         assert_eq!(classify("pop", "debian ubuntu"), DistroFamily::Debian);
         assert_eq!(classify("fedora", ""), DistroFamily::Fedora);
-        assert_eq!(classify("rocky", "rhel centos fedora"), DistroFamily::Fedora);
-        assert_eq!(classify("opensuse-leap", "suse opensuse"), DistroFamily::Suse);
+        assert_eq!(
+            classify("rocky", "rhel centos fedora"),
+            DistroFamily::Fedora
+        );
+        assert_eq!(
+            classify("opensuse-leap", "suse opensuse"),
+            DistroFamily::Suse
+        );
         assert_eq!(classify("gentoo", ""), DistroFamily::Other);
     }
 

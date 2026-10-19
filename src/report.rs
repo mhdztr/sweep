@@ -1,9 +1,9 @@
 //! JSON report models — `sweep scan --json`, schema v1. Spec: plan §2.13,
 //! `docs/CLI-UX.md` §9, `docs/ARCHITECTURE.md` §12.
 
+use crate::SCHEMA_VERSION;
 use crate::ctx::Ctx;
 use crate::scan::ScanOutput;
-use crate::SCHEMA_VERSION;
 
 #[derive(serde::Serialize)]
 pub struct ScanReport {

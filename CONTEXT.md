@@ -142,6 +142,7 @@ silently diverge from a documented decision.
 | 2026-10-19 | R1 | Initial plan: Rust, gated full mode, all soft hogs, name `sweep`, dev-artifacts kept caution, bonuses (top/history/timer/snapper) |
 | 2026-10-19 | R2 | Extensification pass: all 7 docs expanded to full spec depth (threat model, 26-rule catalog, prompt copy catalog, ADRs, M0–M7 tasks+gates) |
 | 2026-10-19 | R3 | M0 built: repo scaffolded at `~/Projects/sweep` (edition 2024, clap surface complete, `SWEEP_TEST_GUARD` sandbox harness, 14 tests green); docs copied/adapted; history-record schema restored into `docs/ARCHITECTURE.md` §11 |
+| 2026-10-19 | R4 | M1 scan engine: jwalk 0.8 walker pruning subtrees via process_read_dir children.retain (verified from source); scan is lock-free — flock scope = mutating commands only (ARCHITECTURE §4, SAFETY §10); hand-rolled ANSI/emoji-aware table renderer (+unicode-width 0.2) instead of comfy-table presets; "newest" = newest counted entry (age-gated files excluded from every count) |
 
 ## 8. Open questions
 

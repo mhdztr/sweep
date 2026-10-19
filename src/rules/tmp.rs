@@ -15,6 +15,19 @@ pub const PROTECTED_EXACT: &[&str] = &["X11-unix", ".XIM-unix", ".ICE-unix"];
 /// Compiled once via glob::Pattern, matched on file_name only.
 pub const PROTECTED_GLOBS: &[&str] = &[".X*-lock"];
 
+/// Compiled ONCE per process (plan §2.10: "compile once via glob::Pattern,
+/// match on file_name only") — `is_protected` runs for every walked entry,
+/// so re-parsing the glob there was per-entry overhead. Invalid patterns are
+/// skipped (they are `&'static` constants; `protected_globs_compile` pins
+/// that none are).
+static PROTECTED_GLOB_PATTERNS: std::sync::LazyLock<Vec<glob::Pattern>> =
+    std::sync::LazyLock::new(|| {
+        PROTECTED_GLOBS
+            .iter()
+            .filter_map(|g| glob::Pattern::new(g).ok())
+            .collect()
+    });
+
 pub fn is_protected(name: &OsStr, kind: EntryKind) -> bool {
     // Special file kinds (sockets / FIFOs / device nodes) are never safe to
     // delete even when the name looks ordinary.
@@ -33,9 +46,7 @@ pub fn is_protected(name: &OsStr, kind: EntryKind) -> bool {
     if PROTECTED_EXACT.contains(&name) {
         return true;
     }
-    PROTECTED_GLOBS.iter().any(|g| {
-        glob::Pattern::new(g).is_ok_and(|p| p.matches(name))
-    })
+    PROTECTED_GLOB_PATTERNS.iter().any(|p| p.matches(name))
 }
 
 pub struct TmpRule;
@@ -51,11 +62,18 @@ impl Rule for TmpRule {
         "tmp & var-tmp"
     }
     fn location(&self, ctx: &Ctx) -> String {
+        // Spec of record (plan §2.10 "location `/tmp`", `Rule` trait
+        // "display_path", CLI-UX §2.1 mock): the PRIMARY root only, through
+        // `display_path` — absolute `/tmp` on a real host, `~/…` in a
+        // sandbox fixture. Joining every root here rendered "/tmp, /var/tmp"
+        // (a non-spec string) and pinned it into all five goldens; the second
+        // root is already named by the category "tmp & var-tmp".
         ctx.tmp_roots
-            .iter()
-            .map(|r| r.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+            .first()
+            .map(|r| super::display_path(&ctx.home, r))
+            // tmp_roots is never empty in practice (Ctx::build/for_test),
+            // but location() must not panic if a future ctx forgets one.
+            .unwrap_or_else(|| "/tmp".to_string())
     }
     fn detect(&self, ctx: &Ctx) -> Detect {
         if !ctx.config.rules.tmp.enabled {
@@ -84,17 +102,18 @@ impl Rule for TmpRule {
         // are reclaimable).
         let keep_days = ctx.keep_days();
         let now = svc.now;
-        let gate: Arc<walker::GateFn> = Arc::new(move |_path: &std::path::Path, info: &EntryInfo| {
-            if keep_days == 0 || info.is_dir() {
-                return Ok(());
-            }
-            let cutoff = now.checked_sub(Duration::from_secs(keep_days as u64 * 86_400));
-            match (info.mtime, cutoff) {
-                // age >= exactly N days ⇒ counted (D-9: mtime <= cutoff).
-                (Some(m), Some(cut)) if m <= cut => Ok(()),
-                _ => Err(SkipKind::KeptNewer),
-            }
-        });
+        let gate: Arc<walker::GateFn> =
+            Arc::new(move |_path: &std::path::Path, info: &EntryInfo| {
+                if keep_days == 0 || info.is_dir() {
+                    return Ok(());
+                }
+                let cutoff = now.checked_sub(Duration::from_secs(keep_days as u64 * 86_400));
+                match (info.mtime, cutoff) {
+                    // age >= exactly N days ⇒ counted (D-9: mtime <= cutoff).
+                    (Some(m), Some(cut)) if m <= cut => Ok(()),
+                    _ => Err(SkipKind::KeptNewer),
+                }
+            });
 
         let mut total = walker::WalkStats::default();
         let mut root_errors: Vec<String> = Vec::new();
@@ -131,7 +150,9 @@ impl Rule for TmpRule {
                 bytes: total.bytes,
                 files: total.files,
                 dirs: total.dirs,
-                newest_age: total.newest.map(|n| now.duration_since(n).unwrap_or_default()),
+                newest_age: total
+                    .newest
+                    .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: total.samples,
                 note: None, // set by scan::run (needs skipped[KeptNewer] + keep_days)
             },
@@ -145,6 +166,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn protected_globs_compile() {
+        // The lazy static drops invalid patterns silently — pin that the
+        // shipped constant list has none (a typo would otherwise turn a
+        // protected entry into a deletable one).
+        for g in PROTECTED_GLOBS {
+            assert!(
+                glob::Pattern::new(g).is_ok(),
+                "PROTECTED_GLOBS entry {g:?} is not a valid glob"
+            );
+        }
+        assert_eq!(PROTECTED_GLOB_PATTERNS.len(), PROTECTED_GLOBS.len());
+    }
+
+    #[test]
     fn protected_names_match_prefix_exact_glob_and_kind() {
         let f = EntryKind::File;
         assert!(is_protected(OsStr::new("systemd-private-abc"), f));
@@ -156,7 +191,10 @@ mod tests {
         assert!(is_protected(OsStr::new(".X123-lock"), f));
         assert!(is_protected(OsStr::new("ordinary-name"), EntryKind::Socket));
         assert!(is_protected(OsStr::new("ordinary-name"), EntryKind::Fifo));
-        assert!(is_protected(OsStr::new("ordinary-name"), EntryKind::CharDevice));
+        assert!(is_protected(
+            OsStr::new("ordinary-name"),
+            EntryKind::CharDevice
+        ));
         assert!(!is_protected(OsStr::new("ordinary-name"), f));
         assert!(!is_protected(OsStr::new("X11-unix.lockfile"), f));
         assert!(!is_protected(OsStr::new("dbusx"), f));

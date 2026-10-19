@@ -40,6 +40,7 @@ a `sweep-lib` ever becomes useful). Edition: latest stable Rust. MSRV: stable �
 │   │   ├── mod.rs           # Rule trait, Tier, Detect, registry::all_rules(&Ctx)
 │   │   ├── tmp.rs           # tmp, tmp-full, var-tmp (protected-list lives here)
 │   │   ├── cache.rs         # user-cache, cache-deep, thumbnails, app-caches
+│   │   ├── trash.rs         # trash (XDG trash: ~/.local/share/Trash/{files,info})
 │   │   ├── browsers.rs      # browser-cache, editor-cache (+ running guards)
 │   │   ├── tools.rs         # tool-caches (npm/pnpm/pip/uv/cargo/go/gem/composer)
 │   │   ├── pkg.rs           # pacman-cache, pkgcache-zero, orphans, aur-builds,
@@ -210,10 +211,12 @@ single JSON result on stdout for the parent to parse (parent never trusts free t
 
 ## 4. Concurrency model
 
-- **Scanning:** one `rayon` scope per rule-root; `jwalk` gives parallel directory
-  entries; results reduce into the rule's `ScanInfo` via `AtomicU64` + mutexed
-  counters (no shared `RefCell` across threads). Progress events → `std::sync::mpsc`
-  → indicatif ticker (UI thread).
+- **Scanning:** one dedicated `rayon` pool sized `available_parallelism()` (the
+  N thread-hit budget); rules run on scoped threads **outside** that pool, while
+  `jwalk` walks with `Parallelism::RayonExistingPool` + a 5 s busy timeout as a
+  hang guard. Results reduce into the rule's `ScanInfo` via `AtomicU64` +
+  mutexed counters (no shared `RefCell` across threads). Progress events →
+  `std::sync::mpsc` → indicatif ticker (UI thread).
 - **Order:** rules scan in parallel but with a **global budget**: max N thread-hits
   (default = available_parallelism) so a huge home scan can't starve the UI.
 - **Cancellation:** `AtomicBool` token checked per directory entry; SIGINT sets it;
@@ -221,8 +224,12 @@ single JSON result on stdout for the parent to parse (parent never trusts free t
   from selection with note; execution phase: finish current rule then abort — §SAFETY).
 - **Execution is sequential by design** (predictable output, ordered progress, no
   parallel `rm` storms); only internal walker of each rule may parallelize.
-- **Single-instance lock:** `flock` on `~/.local/state/sweep/sweep.lock` for the
-  whole run (second instance exits 1 with "another sweep is running (pid N)").
+- **Single-instance lock:** `flock` on `~/.local/state/sweep/sweep.lock` is
+  acquired by **mutating** commands (a clean run start, the sudo system pass,
+  state writes) for the whole mutating run. Read-only commands (`scan`, `top`,
+  `history`, `doctor`) never create or acquire the lock — `scan` must mutate
+  nothing (§0.2). A second mutating instance exits 1 with
+  `another sweep is running (pid N, since HH:MM)`.
 
 ---
 
@@ -246,6 +253,18 @@ walk(root):
       progress.maybe_tick()
 ```
 
+- **Implementation notes (M1, jwalk 0.8):** subtree pruning happens in
+  `process_read_dir` via `children.retain` (a pruned entry is **neither yielded
+  nor descended**); children are sorted inside the same callback (deterministic
+  walk order); `skip_hidden(false)` is set explicitly — jwalk's default is
+  `true`, which would silently drop dotfiles from caches/tmp; the age gate
+  filters **non-dir** entries at count time (directories are always counted,
+  at 0 bytes); one `lstat` per entry, with mtime/dev stashed in jwalk's
+  `client_state`; `WalkOptions.root_dev` is a documented test seam (it pins
+  the mount-bound check for fixtures); symlinks count as 0-byte files and are
+  never followed; directories contribute 0 bytes, so scan totals are file-size
+  sums only (du tolerance: compare against `du --apparent-size`, which also
+  counts dir inodes — expect the scan ≤ du).
 - **Protected list** shared between walker (scan) and `del.rs` (execute) — one
   source of truth (`rules::tmp::PROTECTED`, glob patterns + `S_ISSOCK/S_ISFIFO`).
 - **Age computation:** `age = now − newest_mtime` (atime unreliable on noatime fs —

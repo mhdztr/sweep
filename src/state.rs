@@ -32,7 +32,7 @@ pub fn run_id_from_unix(secs: u64) -> String {
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as i64; // [0, 146096]
+    let doe = z - era * 146_097; // [0, 146096]
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
     let y = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
@@ -177,7 +177,10 @@ mod tests {
         // Leap-year civil-from-days: 2024-02-29 = 19782 days after epoch.
         assert_eq!(run_id_from_unix(19_782 * 86_400), "20240229T000000");
         // End of leap year boundary.
-        assert_eq!(run_id_from_unix(19_783 * 86_400 + 3_600 + 60 + 5), "20240301T010105");
+        assert_eq!(
+            run_id_from_unix(19_783 * 86_400 + 3_600 + 60 + 5),
+            "20240301T010105"
+        );
         assert!(regex_like(&run_id_now()));
     }
 
@@ -185,7 +188,11 @@ mod tests {
         s.len() == 15
             && s.as_bytes()[8] == b'T'
             && s.bytes().enumerate().all(|(i, b)| {
-                if i == 8 { b == b'T' } else { b.is_ascii_digit() }
+                if i == 8 {
+                    b == b'T'
+                } else {
+                    b.is_ascii_digit()
+                }
             })
     }
 
@@ -196,10 +203,7 @@ mod tests {
         match acquire_lock(dir.path()) {
             Err(LockError::Held { pid, since }) => {
                 assert_eq!(pid, std::process::id());
-                assert!(
-                    regex_hhmm(&since),
-                    "since should be HH:MM, got {since:?}"
-                );
+                assert!(regex_hhmm(&since), "since should be HH:MM, got {since:?}");
             }
             other => panic!("expected Held, got {other:?}"),
         }

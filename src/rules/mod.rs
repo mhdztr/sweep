@@ -1,7 +1,7 @@
 //! Rule trait + tier model + the M1 rule registry. Spec: plan §2.9.
 
 use crate::ctx::Ctx;
-use crate::scan::{RuleScan, ScanService, ScanError};
+use crate::scan::{RuleScan, ScanError, ScanService};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,8 +24,8 @@ impl Tier {
     /// Table tier glyph (CLI-UX §8: `+ [x] [ ] ! #`).
     pub fn glyph(&self, unicode: bool) -> &'static str {
         match (self, unicode) {
-            (Tier::Safe, true) => "\u{1f7e9}",    // 🟩
-            (Tier::Caution, true) => "\u{1f7e8}", // 🟨
+            (Tier::Safe, true) => "\u{1f7e9}",        // 🟩
+            (Tier::Caution, true) => "\u{1f7e8}",     // 🟨
             (Tier::Destructive, true) => "\u{1f7e5}", // 🟥
             (Tier::Safe, false) => "+",
             (Tier::Caution, false) => "!",
@@ -47,8 +47,10 @@ impl Tier {
 pub enum Detect {
     Ready,
     NotApplicable {
-        /// "~/.cache not found", "disabled in config", "/tmp and /var/tmp
-        /// not found", "trash not found".
+        /// "~/.cache not found" (user-cache), "~/.cache/thumbnails not
+        /// found" (thumbnails), "disabled in config", "/tmp and /var/tmp
+        /// not found", "trash not found". Reason names the RULE'S ROOT (not
+        /// an ancestor of it) — copy-locked by tests.
         reason: String,
     },
 }

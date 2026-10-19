@@ -1,8 +1,12 @@
-//! CLI surface smoke tests (M0): parsing, help/version, exit codes, stubs.
+//! CLI surface smoke tests: parsing, help/version, exit codes, stubs.
 //! Spec: docs/CLI-UX.md — messages here are copy-locked.
 //!
 //! Env-mutating tests live in `env_guard.rs` / `sandbox.rs` (own processes);
-//! this file only spawns child processes and must stay env-clean.
+//! this file only spawns child processes and must stay env-clean — `.env(...)`
+//! below sets variables on the *child* only, which is the sanctioned pattern
+//! for CLI tests (plan §4).
+
+mod common;
 
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt as _;
@@ -72,7 +76,6 @@ fn no_args_defaults_to_clean_flow() {
 #[test]
 fn stub_commands_exit_1_with_milestone_hint() {
     for (args, milestone) in [
-        (vec!["scan"], "M1"),
         (vec!["doctor"], "M5"),
         (vec!["history"], "M4"),
         (vec!["rules", "list"], "M3"),
@@ -130,10 +133,27 @@ fn destructive_bypass_flag_parses_and_is_hidden() {
     .expect("utf8");
     assert!(!help.contains("--i-know-what-im-doing"));
 
-    // Parses globally even after a subcommand; still hits the stub (exit 1).
+    // Parses globally even after a subcommand. `scan` ignores both flags
+    // (read-only, M1) and exits 0 against a sandboxed fixture home.
+    let dir = tempfile::tempdir().expect("tempdir");
+    common::scan_fixture(dir.path());
     sweep()
         .args(["scan", "--i-know-what-im-doing", "--dry-run"])
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
         .assert()
-        .failure()
-        .code(1);
+        .success();
+}
+
+#[test]
+fn scan_exits_zero_on_fixture() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    common::scan_fixture(dir.path());
+    sweep()
+        .arg("scan")
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("reclaimable:"));
 }

@@ -11,7 +11,7 @@ use crate::ctx::Ctx;
 use crate::scan::{self, ScanEvent};
 use std::io::IsTerminal as _;
 use std::sync::atomic::AtomicBool;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 
 pub fn run(root: Root) -> i32 {
     let ctx = match Ctx::build(&root) {
@@ -78,12 +78,7 @@ pub fn run(root: Root) -> i32 {
     );
     print!(
         "{}",
-        crate::ui::table::render_scan_table(
-            &out.results,
-            width,
-            &theme,
-            ctx.flags.verbose > 0,
-        )
+        crate::ui::table::render_scan_table(&out.results, width, &theme, ctx.flags.verbose > 0,)
     );
     println!(
         "{}",

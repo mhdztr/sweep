@@ -3,10 +3,10 @@
 //! Spec: plan §2.15; copy: `docs/CLI-UX.md` §2.1 (mock) / §8 (tier glyphs).
 
 use crate::rules::Tier;
-use crate::scan::walker::SkipKind;
 use crate::scan::RuleResult;
+use crate::scan::walker::SkipKind;
 use crate::ui::format::{format_age, format_bytes};
-use crate::ui::{Theme, CAUTION, DESTRUCTIVE, SAFE};
+use crate::ui::{CAUTION, DESTRUCTIVE, SAFE, Theme};
 use unicode_width::UnicodeWidthChar;
 
 /// ANSI-aware display width: CSI sequences (ESC `[` … final byte 0x40..=0x7E)
@@ -74,13 +74,22 @@ struct Seg {
 
 impl Seg {
     fn plain(text: impl Into<String>) -> Self {
-        Seg { text: text.into(), style: Style::Plain }
+        Seg {
+            text: text.into(),
+            style: Style::Plain,
+        }
     }
     fn dim(text: impl Into<String>) -> Self {
-        Seg { text: text.into(), style: Style::Dim }
+        Seg {
+            text: text.into(),
+            style: Style::Dim,
+        }
     }
     fn color(color: (u8, u8, u8), text: impl Into<String>) -> Self {
-        Seg { text: text.into(), style: Style::Color(color) }
+        Seg {
+            text: text.into(),
+            style: Style::Color(color),
+        }
     }
     fn render(&self, theme: &Theme) -> String {
         match self.style {
@@ -114,10 +123,16 @@ impl Cell {
     }
 }
 
+/// Vertical bar: `│` unicode, `|` ascii (plan §2.15/§4).
+fn vbar(unicode: bool) -> char {
+    if unicode { '│' } else { '|' }
+}
+
 /// One table row: `" │" + cell + "│" + … + "│"`. Cells render `" "` + content
 /// padded to (w−2) + `" "`; overflow squeezes the padding first.
 fn render_line(cells: &[Cell], widths: &[usize], theme: &Theme) -> String {
-    let mut line = String::from(" │");
+    let bar = vbar(theme.unicode);
+    let mut line = format!(" {bar}");
     for (cell, w) in cells.iter().zip(widths) {
         let inner = w.saturating_sub(2);
         let pad = inner.saturating_sub(cell.visible());
@@ -127,21 +142,24 @@ fn render_line(cells: &[Cell], widths: &[usize], theme: &Theme) -> String {
             format!(" {}{} ", cell.render(theme), " ".repeat(pad))
         };
         line.push_str(&body);
-        line.push('│');
+        line.push(bar);
     }
     line
 }
 
-fn border_line(kind: BorderKind, widths: &[usize]) -> String {
+/// Border row: unicode box-drawing (`┌┬┐├┼┤└┴┘`, `─`) or ASCII (`+`, `-`)
+/// when `theme.unicode` is false — plan §2.15/§4 require `+-+|` in the ascii
+/// golden (`--no-unicode` must emit no box-drawing glyphs at all).
+fn border_line(kind: BorderKind, widths: &[usize], unicode: bool) -> String {
     let mut line = String::from(" ");
-    line.push(kind.lead());
+    line.push(kind.lead(unicode));
     for (i, w) in widths.iter().enumerate() {
         if i > 0 {
-            line.push(kind.mid());
+            line.push(kind.mid(unicode));
         }
-        line.push_str(&"─".repeat(*w));
+        line.push_str(&kind.fill(unicode).to_string().repeat(*w));
     }
-    line.push(kind.tail());
+    line.push(kind.tail(unicode));
     line
 }
 
@@ -152,33 +170,33 @@ enum BorderKind {
     Bottom,
 }
 
-trait BorderChars {
-    fn lead(self) -> char;
-    fn mid(self) -> char;
-    fn tail(self) -> char;
-}
-
-impl BorderChars for BorderKind {
-    fn lead(self) -> char {
-        match self {
-            BorderKind::Top => '┌',
-            BorderKind::Mid => '├',
-            BorderKind::Bottom => '└',
+impl BorderKind {
+    fn lead(self, unicode: bool) -> char {
+        match (self, unicode) {
+            (_, false) => '+',
+            (BorderKind::Top, true) => '┌',
+            (BorderKind::Mid, true) => '├',
+            (BorderKind::Bottom, true) => '└',
         }
     }
-    fn mid(self) -> char {
-        match self {
-            BorderKind::Top => '┬',
-            BorderKind::Mid => '┼',
-            BorderKind::Bottom => '┴',
+    fn mid(self, unicode: bool) -> char {
+        match (self, unicode) {
+            (_, false) => '+',
+            (BorderKind::Top, true) => '┬',
+            (BorderKind::Mid, true) => '┼',
+            (BorderKind::Bottom, true) => '┴',
         }
     }
-    fn tail(self) -> char {
-        match self {
-            BorderKind::Top => '┐',
-            BorderKind::Mid => '┤',
-            BorderKind::Bottom => '┘',
+    fn tail(self, unicode: bool) -> char {
+        match (self, unicode) {
+            (_, false) => '+',
+            (BorderKind::Top, true) => '┐',
+            (BorderKind::Mid, true) => '┤',
+            (BorderKind::Bottom, true) => '┘',
         }
+    }
+    fn fill(self, unicode: bool) -> char {
+        if unicode { '─' } else { '-' }
     }
 }
 
@@ -253,7 +271,12 @@ fn fit_widths(mut widths: [usize; 5], budget: usize) -> [usize; 5] {
 /// `tier | category | size` (category shrinks + ellipsis, location/notes
 /// dropped); < 60: two-line compact rows. `-v` appends per-rule detail lines
 /// (dim) after the table. All lines start with a leading space.
-pub fn render_scan_table(results: &[RuleResult], width: usize, theme: &Theme, verbose: bool) -> String {
+pub fn render_scan_table(
+    results: &[RuleResult],
+    width: usize,
+    theme: &Theme,
+    verbose: bool,
+) -> String {
     let mut out = String::new();
     if width >= 100 {
         render_wide(results, width, theme, &mut out);
@@ -274,29 +297,56 @@ pub fn render_scan_table(results: &[RuleResult], width: usize, theme: &Theme, ve
 fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     let tier_cells: Vec<usize> = results
         .iter()
-        .map(|r| display_width(&format!("{} {}", r.tier.glyph(theme.unicode), r.tier.label())))
+        .map(|r| {
+            display_width(&format!(
+                "{} {}",
+                r.tier.glyph(theme.unicode),
+                r.tier.label()
+            ))
+        })
         .collect();
     let cat_cells: Vec<usize> = results
         .iter()
         .map(|r| {
-            let note = if r.applied { r.info.note.as_deref() } else { r.reason.as_deref() };
-            display_width(&r.category) + note.map(|n| display_width(&suffix(n))).unwrap_or(0)
+            let note = if r.applied {
+                r.info.note.as_deref()
+            } else {
+                r.reason.as_deref()
+            };
+            display_width(r.category) + note.map(|n| display_width(&suffix(n))).unwrap_or(0)
         })
         .collect();
     let loc_cells: Vec<usize> = results.iter().map(|r| display_width(&r.location)).collect();
     let size_cells: Vec<usize> = results
         .iter()
-        .map(|r| display_width(&if r.applied { format_bytes(r.info.bytes) } else { "—".into() }))
+        .map(|r| {
+            display_width(&if r.applied {
+                format_bytes(r.info.bytes)
+            } else {
+                "—".into()
+            })
+        })
         .collect();
     let files_cells: Vec<usize> = results
         .iter()
-        .map(|r| display_width(&if r.applied { r.info.files.to_string() } else { "—".into() }))
+        .map(|r| {
+            display_width(&if r.applied {
+                r.info.files.to_string()
+            } else {
+                "—".into()
+            })
+        })
         .collect();
 
     // Widths = max(content, header) + 2 padding, floors (content) 6/14/9/4/5
     // (+2 each). Budget = width −1 (leading space) −6 (border chars).
     let natural = |cells: Vec<usize>, header: usize| {
-        cells.into_iter().chain(std::iter::once(header)).max().unwrap_or(0) + 2
+        cells
+            .into_iter()
+            .chain(std::iter::once(header))
+            .max()
+            .unwrap_or(0)
+            + 2
     };
     let widths = fit_widths(
         [
@@ -309,7 +359,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
         width.saturating_sub(7),
     );
 
-    out.push_str(&border_line(BorderKind::Top, &widths));
+    out.push_str(&border_line(BorderKind::Top, &widths, theme.unicode));
     out.push('\n');
     out.push_str(&render_line(
         &[
@@ -323,7 +373,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
         theme,
     ));
     out.push('\n');
-    out.push_str(&border_line(BorderKind::Mid, &widths));
+    out.push_str(&border_line(BorderKind::Mid, &widths, theme.unicode));
     out.push('\n');
 
     for r in results {
@@ -331,20 +381,26 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
         // plain part shrinks first; a note that cannot fit at all is dropped
         // (visible via `-v`).
         let mut segs = vec![Seg::plain(r.category)];
-        let note = if r.applied { r.info.note.as_deref() } else { r.reason.as_deref() };
+        let note = if r.applied {
+            r.info.note.as_deref()
+        } else {
+            r.reason.as_deref()
+        };
         if let Some(note) = note {
             let s = suffix(note);
-            let room = widths[1].saturating_sub(2).saturating_sub(display_width(&r.category));
+            let room = widths[1]
+                .saturating_sub(2)
+                .saturating_sub(display_width(r.category));
             if room >= display_width(&s) {
                 segs.push(Seg::dim(s));
             } else {
                 let cat_room = widths[1].saturating_sub(2);
-                segs[0] = Seg::plain(truncate(&r.category, cat_room, theme.unicode));
+                segs[0] = Seg::plain(truncate(r.category, cat_room, theme.unicode));
             }
         } else {
             let cat_room = widths[1].saturating_sub(2);
-            if display_width(&r.category) > cat_room {
-                segs[0] = Seg::plain(truncate(&r.category, cat_room, theme.unicode));
+            if display_width(r.category) > cat_room {
+                segs[0] = Seg::plain(truncate(r.category, cat_room, theme.unicode));
             }
         }
         out.push_str(&render_line(
@@ -365,14 +421,20 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
         out.push('\n');
     }
 
-    out.push_str(&border_line(BorderKind::Bottom, &widths));
+    out.push_str(&border_line(BorderKind::Bottom, &widths, theme.unicode));
     out.push('\n');
 }
 
 fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     let tier_w = results
         .iter()
-        .map(|r| display_width(&format!("{} {}", r.tier.glyph(theme.unicode), r.tier.label())))
+        .map(|r| {
+            display_width(&format!(
+                "{} {}",
+                r.tier.glyph(theme.unicode),
+                r.tier.label()
+            ))
+        })
         .chain([display_width("tier")])
         .max()
         .unwrap_or(0)
@@ -380,7 +442,13 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
         + 2;
     let size_w = results
         .iter()
-        .map(|r| display_width(&if r.applied { format_bytes(r.info.bytes) } else { "—".into() }))
+        .map(|r| {
+            display_width(&if r.applied {
+                format_bytes(r.info.bytes)
+            } else {
+                "—".into()
+            })
+        })
         .chain([display_width("size")])
         .max()
         .unwrap_or(0)
@@ -391,7 +459,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
     let cat_w = width.saturating_sub(1 + 4 + tier_w + size_w).max(12);
     let widths = [tier_w, cat_w, size_w];
 
-    out.push_str(&border_line(BorderKind::Top, &widths));
+    out.push_str(&border_line(BorderKind::Top, &widths, theme.unicode));
     out.push('\n');
     out.push_str(&render_line(
         &[
@@ -403,7 +471,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
         theme,
     ));
     out.push('\n');
-    out.push_str(&border_line(BorderKind::Mid, &widths));
+    out.push_str(&border_line(BorderKind::Mid, &widths, theme.unicode));
     out.push('\n');
 
     for r in results {
@@ -412,7 +480,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
             &[
                 tier_cell(r, theme),
                 Cell::left(vec![Seg::plain(truncate(
-                    &r.category,
+                    r.category,
                     widths[1].saturating_sub(2),
                     theme.unicode,
                 ))]),
@@ -424,7 +492,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
         out.push('\n');
     }
 
-    out.push_str(&border_line(BorderKind::Bottom, &widths));
+    out.push_str(&border_line(BorderKind::Bottom, &widths, theme.unicode));
     out.push('\n');
 }
 
@@ -437,7 +505,7 @@ fn render_compact(results: &[RuleResult], width: usize, theme: &Theme, out: &mut
         out.push_str(&format!(
             "  {}  {}\n",
             theme.paint(tier_color(r.tier), &tier),
-            truncate(&r.category, room, theme.unicode)
+            truncate(r.category, room, theme.unicode)
         ));
         let (size, files) = if r.applied {
             (format_bytes(r.info.bytes), r.info.files.to_string())
@@ -468,7 +536,11 @@ fn detail_line(r: &RuleResult) -> String {
     let parts: Vec<String> = skips
         .iter()
         .filter_map(|(kind, label)| {
-            r.skipped.get(kind).copied().filter(|n| *n > 0).map(|n| format!("{n} {label}"))
+            r.skipped
+                .get(kind)
+                .copied()
+                .filter(|n| *n > 0)
+                .map(|n| format!("{n} {label}"))
         })
         .collect();
     if !parts.is_empty() {
@@ -511,7 +583,11 @@ mod tests {
             category: "tmp & var-tmp",
             tier: Tier::Safe,
             applied,
-            reason: if applied { None } else { Some("/tmp and /var/tmp not found".into()) },
+            reason: if applied {
+                None
+            } else {
+                Some("/tmp and /var/tmp not found".into())
+            },
             needs_sudo: false,
             location: "/tmp".into(),
             info: ScanInfo {
@@ -530,7 +606,15 @@ mod tests {
     #[test]
     fn compact_mode_is_two_lines_per_row() {
         let results = vec![result(true), result(false)];
-        let s = render_scan_table(&results, 50, &Theme { color: false, unicode: true }, false);
+        let s = render_scan_table(
+            &results,
+            50,
+            &Theme {
+                color: false,
+                unicode: true,
+            },
+            false,
+        );
         let lines: Vec<&str> = s.lines().collect();
         assert_eq!(lines.len(), 4, "compact = 2 lines per row:\n{s}");
         assert_eq!(lines[0], "  🟩 safe  tmp & var-tmp");
@@ -542,7 +626,15 @@ mod tests {
     #[test]
     fn wide_mode_has_one_header_separator_and_aligned_rows() {
         let results = vec![result(true)];
-        let s = render_scan_table(&results, 120, &Theme { color: false, unicode: true }, false);
+        let s = render_scan_table(
+            &results,
+            120,
+            &Theme {
+                color: false,
+                unicode: true,
+            },
+            false,
+        );
         let lines: Vec<&str> = s.lines().collect();
         assert_eq!(lines.len(), 5, "top + header + sep + row + bottom:\n{s}");
         let width_line = display_width(lines[0]);
@@ -557,7 +649,15 @@ mod tests {
     #[test]
     fn narrow_mode_drops_location_and_notes() {
         let results = vec![result(true)];
-        let s = render_scan_table(&results, 80, &Theme { color: false, unicode: true }, false);
+        let s = render_scan_table(
+            &results,
+            80,
+            &Theme {
+                color: false,
+                unicode: true,
+            },
+            false,
+        );
         assert!(!s.contains("/tmp"), "location dropped in narrow mode:\n{s}");
         assert!(!s.contains("newer"), "notes dropped in narrow mode:\n{s}");
         assert!(s.contains("tmp & var-tmp"));
@@ -565,14 +665,58 @@ mod tests {
     }
 
     #[test]
+    fn ascii_mode_uses_ascii_borders_and_glyphs() {
+        // plan §2.15/§4: `scan_table_ascii` = unicode false → borders `+-+|`,
+        // tier `+ safe`, `...` (no box-drawing glyphs anywhere in the table).
+        let results = vec![result(true), result(false)];
+        let s = render_scan_table(
+            &results,
+            120,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+            false,
+        );
+        let lines: Vec<&str> = s.lines().collect();
+        assert!(
+            lines[0].chars().all(|c| "+- ".contains(c)),
+            "ascii top border must be +/−:\n{s}"
+        );
+        assert!(
+            lines[1].starts_with(" | tier"),
+            "ascii header row uses '|':\n{s}"
+        );
+        assert!(s.contains("+ safe"), "ascii tier glyph:\n{s}");
+        assert!(
+            !s.contains('│') && !s.contains('─') && !s.contains('┌'),
+            "no box-drawing glyphs in ascii mode:\n{s}"
+        );
+    }
+
+    #[test]
     fn verbose_appends_dim_detail_lines() {
         let mut r = result(true);
         r.skipped.insert(SkipKind::KeptNewer, 1);
-        let s = render_scan_table(&[r], 120, &Theme { color: true, unicode: true }, true);
-        let detail = s.lines().find(|l| l.contains("tmp: 2 files")).expect("detail line");
+        let s = render_scan_table(
+            &[r],
+            120,
+            &Theme {
+                color: true,
+                unicode: true,
+            },
+            true,
+        );
+        let detail = s
+            .lines()
+            .find(|l| l.contains("tmp: 2 files"))
+            .expect("detail line");
         assert!(detail.contains("newest never"));
         assert!(detail.contains("kept: 1 newer-than-gate"));
         assert!(detail.contains("/tmp/old.bin"));
-        assert!(detail.contains('\u{1b}'), "detail lines are dim (SGR present)");
+        assert!(
+            detail.contains('\u{1b}'),
+            "detail lines are dim (SGR present)"
+        );
     }
 }

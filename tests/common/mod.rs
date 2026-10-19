@@ -101,9 +101,9 @@ pub fn scan_fixture(home: &Path) {
 
     // Depth-1 .cache dir mtimes drive the hot skip (300 s window): the two
     // old cache dirs must NOT look hot; fresh-entry must.
-    filetime::set_file_mtime(&home.join(".cache/app-cache"), old).expect("mtime");
-    filetime::set_file_mtime(&home.join(".cache/thumbnails"), old).expect("mtime");
-    filetime::set_file_mtime(&home.join(".cache/fresh-entry"), fresh).expect("mtime");
+    filetime::set_file_mtime(home.join(".cache/app-cache"), old).expect("mtime");
+    filetime::set_file_mtime(home.join(".cache/thumbnails"), old).expect("mtime");
+    filetime::set_file_mtime(home.join(".cache/fresh-entry"), fresh).expect("mtime");
 }
 
 /// Recursive manifest of (kind, len, mtime_ns) keyed by absolute path.
@@ -116,7 +116,9 @@ pub fn manifest(path: &Path) -> std::collections::BTreeMap<PathBuf, (u8, u64, u6
 
 fn collect(dir: &Path, map: &mut std::collections::BTreeMap<PathBuf, (u8, u64, u64)>) {
     use std::os::unix::fs::MetadataExt as _;
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in rd.flatten() {
         let p = entry.path();
         let Ok(md) = std::fs::symlink_metadata(&p) else {

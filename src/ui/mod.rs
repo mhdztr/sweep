@@ -95,10 +95,7 @@ pub fn terminal_width() -> usize {
 /// content lines `c1` / `c3` (c2 dropped), hard-truncated to `width`.
 /// Returns the render ending in `\n\n` (blank line after the box).
 pub fn render_header(ctx: &Ctx, reclaimable: u64, width: usize, theme: &Theme) -> String {
-    let c1 = format!(
-        "sweep {} · storage cleaner",
-        env!("CARGO_PKG_VERSION")
-    );
+    let c1 = format!("sweep {} · storage cleaner", env!("CARGO_PKG_VERSION"));
     let c2 = format!(
         "{} · {}",
         ctx.system.distro_name.to_lowercase(),
@@ -174,17 +171,32 @@ mod tests {
 
     #[test]
     fn theme_without_color_returns_plain_strings() {
-        let t = Theme { color: false, unicode: true };
+        let t = Theme {
+            color: false,
+            unicode: true,
+        };
         assert_eq!(t.paint(SAFE, "x"), "x");
         assert_eq!(t.bold("x"), "x");
         assert_eq!(t.dim("x"), "x");
-        let colored = Theme { color: true, unicode: true }.paint(SAFE, "x");
+        let colored = Theme {
+            color: true,
+            unicode: true,
+        }
+        .paint(SAFE, "x");
         assert!(colored.contains('\u{1b}'), "color theme must emit SGR");
     }
 
     #[test]
     fn header_plain_mode_is_two_truncated_lines() {
-        let s = render_header(&ctx(), 20_602, 40, &Theme { color: false, unicode: false });
+        let s = render_header(
+            &ctx(),
+            20_602,
+            40,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+        );
         let lines: Vec<&str> = s.split('\n').collect();
         assert_eq!(lines[0], "sweep 0.1.0 · storage cleaner");
         assert!(lines[1].starts_with("root: 1 TiB total"));
@@ -194,7 +206,15 @@ mod tests {
 
     #[test]
     fn header_box_rows_fit_the_border_exactly() {
-        let s = render_header(&ctx(), 20_602, 120, &Theme { color: false, unicode: true });
+        let s = render_header(
+            &ctx(),
+            20_602,
+            120,
+            &Theme {
+                color: false,
+                unicode: true,
+            },
+        );
         let lines: Vec<&str> = s.split('\n').collect();
         let inner = display_width(lines[0]) - 2; // strip ╭/╮
         assert_eq!(display_width(lines[1]), inner + 2, "row1 must fit border");
@@ -208,7 +228,10 @@ mod tests {
 
     #[test]
     fn footer_matches_the_plan_copy_exactly() {
-        let t = Theme { color: true, unicode: true };
+        let t = Theme {
+            color: true,
+            unicode: true,
+        };
         assert_eq!(
             render_footer(20_602, 20_602, 410, &t),
             "reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s"

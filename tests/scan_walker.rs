@@ -3,12 +3,10 @@
 use std::os::unix::fs::MetadataExt as _;
 use std::path::Path;
 use std::sync::atomic::Ordering;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, SystemTime};
-use sweep::scan::walker::{
-    walk, EntryInfo, Prune, SkipKind, WalkOptions,
-};
 use sweep::scan::ScanEvent;
+use sweep::scan::walker::{EntryInfo, Prune, SkipKind, WalkOptions, walk};
 
 fn pool() -> Arc<rayon::ThreadPool> {
     Arc::new(
@@ -32,9 +30,7 @@ fn seed_file(dir: &Path, rel: &str, len: u64, mtime: filetime::FileTime) -> std:
 }
 
 fn old() -> filetime::FileTime {
-    filetime::FileTime::from_system_time(
-        SystemTime::now() - Duration::from_secs(10 * 86_400),
-    )
+    filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(10 * 86_400))
 }
 
 #[test]
@@ -49,7 +45,10 @@ fn symlink_to_file_counted_zero_bytes_target_not_followed() {
 
     let stats = walk(&root, &opts()).expect("walk");
     assert_eq!(stats.files, 1);
-    assert_eq!(stats.bytes, 0, "symlink counts 0 bytes, target not followed");
+    assert_eq!(
+        stats.bytes, 0,
+        "symlink counts 0 bytes, target not followed"
+    );
 }
 
 #[test]
@@ -64,7 +63,10 @@ fn symlink_to_dir_not_descended() {
     let stats = walk(&root, &opts()).expect("walk");
     assert_eq!(stats.files, 1, "only the symlink itself is counted");
     assert_eq!(stats.bytes, 0);
-    assert_eq!(stats.dirs, 1, "only the root dir; symlinked dir not descended");
+    assert_eq!(
+        stats.dirs, 1,
+        "only the root dir; symlinked dir not descended"
+    );
 }
 
 #[test]
@@ -78,14 +80,13 @@ fn prune_predicate_removes_subtree_without_descending() {
     seed_file(&root, "pruned/deeper/most-inner.bin", 5_000, old());
 
     let mut o = opts();
-    let prune: Arc<sweep::scan::walker::PruneFn> =
-        Arc::new(|_p: &Path, info: &EntryInfo| {
-            if info.depth == 1 && info.name == "pruned" {
-                Prune::Drop(SkipKind::Protected)
-            } else {
-                Prune::Keep
-            }
-        });
+    let prune: Arc<sweep::scan::walker::PruneFn> = Arc::new(|_p: &Path, info: &EntryInfo| {
+        if info.depth == 1 && info.name == "pruned" {
+            Prune::Drop(SkipKind::Protected)
+        } else {
+            Prune::Keep
+        }
+    });
     o.prune = Some(prune);
     let stats = walk(&root, &o).expect("walk");
     assert_eq!(stats.bytes, 100);
@@ -175,7 +176,12 @@ fn newest_mtime_tracked_across_entries() {
 
     // StatInfo stores mtime as whole unix seconds, so compare truncated.
     let sec = |t: SystemTime| -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(t.duration_since(SystemTime::UNIX_EPOCH).expect("epoch").as_secs())
+        SystemTime::UNIX_EPOCH
+            + Duration::from_secs(
+                t.duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("epoch")
+                    .as_secs(),
+            )
     };
 
     // No gate: newest == max mtime (truncated to seconds).
@@ -211,7 +217,10 @@ fn progress_events_emitted_every_256_dirs() {
     o.progress = Some(tx);
     let stats = walk(&root, &o).expect("walk");
     assert_eq!(stats.dirs, 301);
-    let walks = rx.try_iter().filter(|e| matches!(e, ScanEvent::Walk { .. })).count();
+    let walks = rx
+        .try_iter()
+        .filter(|e| matches!(e, ScanEvent::Walk { .. }))
+        .count();
     assert!(walks >= 1, "expected at least one Walk event, got {walks}");
 }
 
@@ -244,4 +253,42 @@ fn errors_on_unreadable_entry_do_not_fail_walk() {
 
     std::fs::set_permissions(&secret, std::os::unix::fs::PermissionsExt::from_mode(0o755))
         .expect("chmod back");
+}
+
+#[test]
+fn stat_failure_entry_dropped_from_counts_but_counted_as_error() {
+    // Root can bypass permissions; nothing to observe there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path().join("root");
+    let list_only = root.join("list-only");
+    std::fs::create_dir_all(&list_only).expect("mkdir");
+    std::fs::write(list_only.join("unmeasurable.bin"), vec![0u8; 500]).expect("write");
+    // r-- on the directory: readdir still lists the child's NAME (read bit),
+    // but lstat() of the child needs execute on this dir → EACCES inside
+    // `process_read_dir` — a genuine stat failure, no root needed.
+    std::fs::set_permissions(
+        &list_only,
+        std::os::unix::fs::PermissionsExt::from_mode(0o444),
+    )
+    .expect("chmod");
+
+    let stats = walk(&root, &opts()).expect("walk survives stat failures");
+
+    // `list-only` itself is lstat'able (root stays 0755) ⇒ counted as a dir.
+    assert_eq!(stats.dirs, 2, "root (counted unconditionally) + list-only");
+    // The unmeasurable child must NOT be fabricated as a 0-byte FILE: it has
+    // no size/age a later `clean` could verify, so it is not reclaimable
+    // inventory (honesty rule; deviation from the plan's literal snippet).
+    assert_eq!(stats.files, 0, "stat-failed entry dropped, not counted");
+    assert!(stats.errors >= 1, "stat failure surfaces in stats.errors");
+
+    // Restore so TempDir cleanup can recurse into it.
+    std::fs::set_permissions(
+        &list_only,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .expect("chmod back");
 }

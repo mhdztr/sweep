@@ -73,7 +73,9 @@ impl Rule for TrashRule {
                 bytes: total.bytes,
                 files: total.files,
                 dirs: total.dirs,
-                newest_age: total.newest.map(|n| now.duration_since(n).unwrap_or_default()),
+                newest_age: total
+                    .newest
+                    .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: total.samples,
                 note: None,
             },

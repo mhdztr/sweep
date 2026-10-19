@@ -38,27 +38,33 @@ Tasks:
 **Depends on:** M0.
 
 Tasks:
-- [ ] `Ctx` build: config load (defaults-only path), `GlobalFlags`, `run_id`, lock acquire
-- [ ] `system/`: `SystemCtx` minimal (distro id + fstype via statvfs/mounts) — full detect in M5
-- [ ] `scan/walker.rs`: jwalk+rayon, symlink-safe, mount-bounded, protected-list
+- [x] `Ctx` build: config load (defaults-only path), `GlobalFlags`, `run_id`, lock acquire
+- [x] `system/`: `SystemCtx` minimal (distro id + fstype via statvfs/mounts) — full detect in M5
+- [x] `scan/walker.rs`: jwalk+rayon, symlink-safe, mount-bounded, protected-list
       hook, mtime/newest tracking, samples(20), progress mpsc, cancellation token
-- [ ] `rules/mod.rs`: `Rule` trait, `Tier`, `Detect`, registry; first 4 rules:
+- [x] `rules/mod.rs`: `Rule` trait, `Tier`, `Detect`, registry; first 4 rules:
       `tmp` (full protected list + age gate), `user-cache` (whitelist + hot skip),
       `thumbnails`, `trash`
-- [ ] `scan/mod.rs`: run registry → `Vec<RuleResult>`, overlap subtraction (`net_of`)
+- [x] `scan/mod.rs`: run registry → `Vec<RuleResult>`, overlap subtraction (`net_of`)
       for user-cache vs thumbnails
-- [ ] `ui/`: header box, `format.rs` (bytes/age), `table.rs` (wide/narrow/ascii),
+- [x] `ui/`: header box, `format.rs` (bytes/age), `table.rs` (wide/narrow/ascii),
       scan progress spinner
-- [ ] `sweep scan` command + `--json` (schema v1, `kind:"scan"`)
-- [ ] `--no-color`/`NO_COLOR`/`--no-unicode`/width handling
-- [ ] Tests: walker fixtures (symlink, protected, mount stub, hot-skip), scan
+- [x] `sweep scan` command + `--json` (schema v1, `kind:"scan"`)
+- [x] `--no-color`/`NO_COLOR`/`--no-unicode`/width handling
+- [x] Tests: walker fixtures (symlink, protected, mount stub, hot-skip), scan
       mutation-free assertion, golden table snapshots (wide/narrow/ascii/no-color),
       JSON required-keys test
 
 **Acceptance gate:**
-- Real Arch machine: `sweep scan` <5 s for these roots; totals match `du` within tolerance.
-- Golden snapshots pass; sandbox manifest proves zero mutations.
-- All 4 rules have exact byte/count tests.
+- [x] Real Arch machine: `sweep scan` <5 s for these roots; totals match `du` within tolerance.
+      Verified on this host 2026-10-19 (EndeavourOS / Arch family): `time cargo run -- scan` =
+      0.300 s wall (well under 5 s); `du -s --apparent-size` over `/tmp`, `/var/tmp`,
+      `~/.cache`, `~/.local/share/Trash` = 20,970,427,228 B vs `scan --json --keep-days 0`
+      `totals.reclaimable_bytes` 21,176,387,183 B → **+0.98%**, inside ±5%. Approximate by
+      nature: `du` hits EACCES on root-owned `systemd-private-*` dirs (undercounts
+      `/var/tmp`), and scan counts directories as 0 bytes.
+- [x] Golden snapshots pass; sandbox manifest proves zero mutations.
+- [x] All 4 rules have exact byte/count tests.
 
 ## M2 — Interactive clean + full safe tier
 **Goal:** the daily-driver loop works end-to-end for all 11 safe rules.

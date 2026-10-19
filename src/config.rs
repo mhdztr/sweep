@@ -109,8 +109,8 @@ impl Default for UserCacheConfig {
     }
 }
 
-/// `path` = `SWEEP_CONFIG` value (`Some`) or `dirs::config_dir()/
-/// sweep/config.toml` (caller resolves). `None` ⇒ absent default path ⇒
+/// `path` = `SWEEP_CONFIG` value (`Some`) or [`default_path`] (sandbox-aware;
+/// caller resolves). `None` ⇒ absent default path ⇒
 /// `Config::default()` (the "defaults-only path"). `Some(p)` missing ⇒
 /// `Missing`. Parse/validation failure ⇒ `Parse`.
 pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
@@ -148,15 +148,46 @@ fn parse_message(text: &str, err: &toml::de::Error) -> String {
     let msg = err.message().to_string();
     match err.span() {
         Some(span) => {
-            let line = text[..span.start.min(text.len())].bytes().filter(|&b| b == b'\n').count() + 1;
+            let line = text[..span.start.min(text.len())]
+                .bytes()
+                .filter(|&b| b == b'\n')
+                .count()
+                + 1;
             format!("{line}: {msg}")
         }
         None => msg,
     }
 }
 
-pub fn default_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("sweep/config.toml"))
+/// Default config path (plan §2.4, `dirs::config_dir()/sweep/config.toml`
+/// semantics).
+///
+/// **Deliberate deviation from the plan's literal `dirs::config_dir()`:**
+/// AGENTS invariant 4 / ARCHITECTURE §0.2 say every `$HOME`-relative path
+/// goes through the resolved home (`dirs::config_dir()` reads `$HOME`/`$HOME/.config`
+/// itself). When `SWEEP_HOME` points a run at a sandbox home, the default
+/// config path must follow it — otherwise a sandboxed test would silently
+/// load the developer's real `~/.config/sweep/config.toml` and become
+/// non-deterministic the moment such a file exists. Outside a sandbox the
+/// behavior is unchanged: exactly `dirs::config_dir()`.
+///
+/// `home` is the value `env::resolve_home()` produced (so `SWEEP_HOME` and
+/// `Ctx::home` agree); the sandbox probe is isolated in [`default_path_in`]
+/// so it is unit-testable without mutating process env (M1 bans that).
+pub fn default_path(home: &Path) -> Option<PathBuf> {
+    default_path_in(home, std::env::var_os("SWEEP_HOME"))
+}
+
+/// Pure core of [`default_path`]: sandboxed (`SWEEP_HOME` non-empty) ⇒
+/// `{home}/.config/sweep/config.toml`; otherwise `dirs::config_dir()`.
+pub(crate) fn default_path_in(
+    home: &Path,
+    sweep_home: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    match sweep_home {
+        Some(v) if !v.is_empty() => Some(home.join(".config/sweep/config.toml")),
+        _ => dirs::config_dir().map(|d| d.join("sweep/config.toml")),
+    }
 }
 
 #[cfg(test)]
@@ -219,7 +250,8 @@ mod tests {
             "display {display:?}"
         );
         assert!(
-            display[format!("config {path_str}: ").len()..].starts_with(|c: char| c.is_ascii_digit()),
+            display[format!("config {path_str}: ").len()..]
+                .starts_with(|c: char| c.is_ascii_digit()),
             "message should start with the line number: {display:?}"
         );
         assert!(display.contains(':'), "line:msg colon present: {display:?}");
@@ -246,5 +278,27 @@ mod tests {
         let err = load_from(Some(&p)).expect_err("missing");
         assert!(matches!(err, ConfigError::Missing { .. }));
         assert!(err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn default_path_sandbox_follows_sweep_home_home() {
+        // Env-free by design (M1 bans env-mutating tests): the sandbox probe
+        // is a parameter, not a read. A SWEEP_HOME run must resolve ITS own
+        // config — never the developer's `~/.config/sweep/config.toml`
+        // (AGENTS invariant 4; critic finding on `dirs::config_dir()`).
+        let sandbox = PathBuf::from("/tmp/sweep-sandbox-home");
+        assert_eq!(
+            default_path_in(
+                &sandbox,
+                Some(std::ffi::OsString::from("/tmp/sweep-sandbox-home"))
+            ),
+            Some(sandbox.join(".config/sweep/config.toml")),
+            "sandboxed default config path lives inside the sandbox home"
+        );
+        // Empty SWEEP_HOME is treated as unset (matches `resolve_home`'s
+        // "must be a real dir" contract defensively) → legacy XDG/default
+        // behavior via `dirs::config_dir()`; only the sandbox branch is
+        // asserted here (the XDG branch reads process env).
+        assert!(default_path_in(&sandbox, Some(std::ffi::OsString::new())).is_some());
     }
 }

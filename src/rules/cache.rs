@@ -45,21 +45,24 @@ impl Rule for UserCacheRule {
         let now = svc.now;
         // Prune at depth == 1 ONLY (children of the `.cache` root):
         // whitelisted keeps + hot entries. No gate.
-        let prune: Arc<walker::PruneFn> = Arc::new(move |_path: &std::path::Path, info: &EntryInfo| {
-            if info.depth != 1 {
-                return Prune::Keep;
-            }
-            let name = info.name.to_string_lossy();
-            if keep.iter().any(|k| k == &*name) {
-                return Prune::Drop(SkipKind::Whitelist);
-            }
-            // Missing mtime treated as hot (conservative, mirrors the tmp
-            // gate's honesty: never claim unreadable files reclaimable).
-            match info.mtime {
-                Some(m) if now.duration_since(m).unwrap_or_default() >= HOT_WINDOW => Prune::Keep,
-                _ => Prune::Drop(SkipKind::Hot),
-            }
-        });
+        let prune: Arc<walker::PruneFn> =
+            Arc::new(move |_path: &std::path::Path, info: &EntryInfo| {
+                if info.depth != 1 {
+                    return Prune::Keep;
+                }
+                let name = info.name.to_string_lossy();
+                if keep.iter().any(|k| k == &*name) {
+                    return Prune::Drop(SkipKind::Whitelist);
+                }
+                // Missing mtime treated as hot (conservative, mirrors the tmp
+                // gate's honesty: never claim unreadable files reclaimable).
+                match info.mtime {
+                    Some(m) if now.duration_since(m).unwrap_or_default() >= HOT_WINDOW => {
+                        Prune::Keep
+                    }
+                    _ => Prune::Drop(SkipKind::Hot),
+                }
+            });
 
         let root = ctx.home.join(".cache");
         let opts = WalkOptions {
@@ -78,7 +81,9 @@ impl Rule for UserCacheRule {
                 bytes: stats.bytes,
                 files: stats.files,
                 dirs: stats.dirs,
-                newest_age: stats.newest.map(|n| now.duration_since(n).unwrap_or_default()),
+                newest_age: stats
+                    .newest
+                    .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: stats.samples,
                 note: None,
             },
@@ -110,7 +115,9 @@ impl Rule for ThumbnailsRule {
         }
         if !ctx.home.join(".cache/thumbnails").is_dir() {
             return Detect::NotApplicable {
-                reason: "~/.cache not found".to_string(),
+                // Truthful: the rule's ROOT is `~/.cache/thumbnails`, not
+                // `~/.cache` — `~/.cache` may well exist (critic finding).
+                reason: "~/.cache/thumbnails not found".to_string(),
             };
         }
         Detect::Ready
