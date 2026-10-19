@@ -1,0 +1,5 @@
+# Stable rustfmt options only (CI runs on stable).
+edition = "2024"
+max_width = 100
+use_field_init_shorthand = true
+use_try_shorthand = true

@@ -1,0 +1,9 @@
+# Rust
+/target
+
+# State / scratch
+*.swp
+.direnv/
+
+# Test artifacts
+/tests/fixtures/**/__tmp__
