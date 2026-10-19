@@ -13,8 +13,10 @@ fn main() {
     std::process::exit(code);
 }
 
-fn dispatch(root: Root) -> i32 {
-    let cmd = root.command.unwrap_or(Commands::Clean {
+fn dispatch(mut root: Root) -> i32 {
+    // take() (not unwrap_or) leaves `root` fully intact — the scan arm needs
+    // the global flags on it (`Ctx::build(&root)` reads them).
+    let cmd = root.command.take().unwrap_or(Commands::Clean {
         only: Vec::new(),
         exclude: Vec::new(),
         no_prompt: false,
@@ -37,7 +39,7 @@ fn dispatch(root: Root) -> i32 {
             1
         }
 
-        Commands::Scan => not_yet("scan", "M1 — scan engine"),
+        Commands::Scan => sweep::cli::scan::run(root),
         Commands::Clean { .. } => not_yet("clean", "M2 — interactive clean"),
         Commands::Top { .. } => not_yet("top", "M6 — biggest-dirs report"),
         Commands::History { .. } => not_yet("history", "M4 — run history"),

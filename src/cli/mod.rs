@@ -1,5 +1,7 @@
 //! Command-line surface. Spec of record: `docs/CLI-UX.md`.
 
+pub mod scan;
+
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 

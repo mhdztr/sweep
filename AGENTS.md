@@ -18,7 +18,7 @@ cargo test                     # unit + integration + sandbox tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo run -- --version         # smoke
-cargo run -- scan              # read-only scan (once M1 lands)
+cargo run -- scan              # read-only scan
 cargo test --test cli_smoke    # CLI surface tests only
 ```
 
