@@ -1,9 +1,9 @@
-# sweep — Configuration Reference (`~/.config/sweep/config.toml`)
+# sweep: Configuration Reference (`~/.config/sweep/config.toml`)
 
 > Generated companion to `docs/ARCHITECTURE.md` §9–§10 (spec of record).
 > Precedence: **CLI flags > env vars > config file > built-in defaults.**
 
-## 9. Config (`~/.config/sweep/config.toml`) — full key reference
+## 9. Config (`~/.config/sweep/config.toml`): full key reference
 
 Precedence: **CLI flags > env > config file > built-in defaults.**
 
@@ -25,7 +25,7 @@ follow_mounts = false                # (reserved) always false in v0.1
 include = []                      # extra rule ids pre-checked
 exclude = ["docker"]              # rule ids never pre-checked by regular
 
-# per-rule sections — keys validated against the rule's schema; unknown key = error
+# per-rule sections: keys validated against the rule's schema; unknown key = error
 [rules.tmp]
 enabled = true
 
@@ -48,7 +48,7 @@ keep_days = 0                     # rescue: skip files newer than N days (0 = no
 [rules.orphans]
 confirm_batch = 200               # if more than N orphans, paginate list at confirm
 
-[[custom]]                        # user-defined rules — see ARCHITECTURE §10
+[[custom]]                        # user-defined rules, see ARCHITECTURE §10
 id = "iso-archive"
 title = "Old ISO images"
 paths = ["~/Archives/isos"]
@@ -58,7 +58,7 @@ tier = "caution"                  # safe|caution|destructive
 sudo = false
 ```
 
-**Validation:** unknown top-level keys warn (not fail) — forward compatible;
+**Validation:** unknown top-level keys warn (not fail), forward compatible;
 unknown `[rules.<id>]` for a *known* rule = error with suggestion; `[custom]`
 validated strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
 `older_than_days` required ≥ 0, reserved prefixes `tmp-`, `pacman-` rejected).

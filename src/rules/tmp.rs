@@ -1,4 +1,4 @@
-//! Rule `tmp` — `/tmp` + `/var/tmp`. Spec: plan §2.10.
+//! Rule `tmp`, `/tmp` + `/var/tmp`. Spec: plan §2.10.
 
 use super::{Detect, Rule};
 use crate::ctx::Ctx;
@@ -16,7 +16,7 @@ pub const PROTECTED_EXACT: &[&str] = &["X11-unix", ".XIM-unix", ".ICE-unix"];
 pub const PROTECTED_GLOBS: &[&str] = &[".X*-lock"];
 
 /// Compiled ONCE per process (plan §2.10: "compile once via glob::Pattern,
-/// match on file_name only") — `is_protected` runs for every walked entry,
+/// match on file_name only"), `is_protected` runs for every walked entry,
 /// so re-parsing the glob there was per-entry overhead. Invalid patterns are
 /// skipped (they are `&'static` constants; `protected_globs_compile` pins
 /// that none are).
@@ -64,7 +64,7 @@ impl Rule for TmpRule {
     fn location(&self, ctx: &Ctx) -> String {
         // Spec of record (plan §2.10 "location `/tmp`", `Rule` trait
         // "display_path", CLI-UX §2.1 mock): the PRIMARY root only, through
-        // `display_path` — absolute `/tmp` on a real host, `~/…` in a
+        // `display_path`, absolute `/tmp` on a real host, `~/…` in a
         // sandbox fixture. Joining every root here rendered "/tmp, /var/tmp"
         // (a non-spec string) and pinned it into all five goldens; the second
         // root is already named by the category "tmp & var-tmp".
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn protected_globs_compile() {
-        // The lazy static drops invalid patterns silently — pin that the
+        // The lazy static drops invalid patterns silently, pin that the
         // shipped constant list has none (a typo would otherwise turn a
         // protected entry into a deletable one).
         for g in PROTECTED_GLOBS {

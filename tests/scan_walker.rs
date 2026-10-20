@@ -110,7 +110,7 @@ fn mount_bounded_entries_pruned_by_dev() {
     let stats = walk(&root, &o).expect("walk");
     assert_eq!(stats.dirs, 1, "only the root");
     assert_eq!(stats.skipped.get(&SkipKind::MountBound), Some(&2));
-    // three.bin is a FILE — the mount check applies to dirs only, so it is
+    // three.bin is a FILE, the mount check applies to dirs only, so it is
     // still counted (files at depth 1 don't lead subtrees).
     assert_eq!(stats.files, 1);
     assert_eq!(stats.bytes, 30);
@@ -170,7 +170,7 @@ fn newest_mtime_tracked_across_entries() {
     seed_file(&root, "a.bin", 1, m_old);
     seed_file(&root, "m.bin", 1, m_mid);
     let newest_path = seed_file(&root, "n.bin", 1, m_new);
-    // The root dir is a counted entry too — pin its mtime old so the three
+    // The root dir is a counted entry too, pin its mtime old so the three
     // files decide `newest`.
     filetime::set_file_mtime(&root, m_old).expect("mtime");
 
@@ -189,7 +189,7 @@ fn newest_mtime_tracked_across_entries() {
     assert_eq!(stats.newest, Some(sec(now - Duration::from_secs(10))));
 
     // With a gate excluding the newest entry: newest drops to the mid mtime
-    // (gated entries never influence newest — plan settled decision 4).
+    // (gated entries never influence newest, plan settled decision 4).
     let mut o = opts();
     let gate: Arc<sweep::scan::walker::GateFn> = Arc::new(move |p: &Path, _i: &EntryInfo| {
         if p.ends_with("n.bin") {
@@ -268,7 +268,7 @@ fn stat_failure_entry_dropped_from_counts_but_counted_as_error() {
     std::fs::write(list_only.join("unmeasurable.bin"), vec![0u8; 500]).expect("write");
     // r-- on the directory: readdir still lists the child's NAME (read bit),
     // but lstat() of the child needs execute on this dir → EACCES inside
-    // `process_read_dir` — a genuine stat failure, no root needed.
+    // `process_read_dir`, a genuine stat failure, no root needed.
     std::fs::set_permissions(
         &list_only,
         std::os::unix::fs::PermissionsExt::from_mode(0o444),

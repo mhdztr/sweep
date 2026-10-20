@@ -23,7 +23,7 @@ pub struct ScanInfo {
     pub newest_age: Option<Duration>,
     /// ≤ 20.
     pub samples: Vec<PathBuf>,
-    /// e.g. "1 newer than keep-days kept" | "(excl. thumbnails)" — human
+    /// e.g. "1 newer than keep-days kept" | "(excl. thumbnails)", human
     /// table only (parenthesization happens in the renderer).
     pub note: Option<String>,
 }
@@ -70,7 +70,7 @@ pub enum ScanEvent {
     },
 }
 
-/// Shared services handed to every rule — lives for the duration of `run()`.
+/// Shared services handed to every rule, lives for the duration of `run()`.
 pub struct ScanService {
     pub cancel: Arc<AtomicBool>,
     pub events: Option<mpsc::Sender<ScanEvent>>,
@@ -84,7 +84,7 @@ pub struct ScanService {
 pub struct RuleResult {
     pub id: &'static str,
     pub title: &'static str,
-    /// Table label (D-5) — differs from JSON `title`.
+    /// Table label (D-5), differs from JSON `title`.
     pub category: &'static str,
     pub tier: Tier,
     /// detect()==Ready AND scan succeeded.
@@ -145,7 +145,7 @@ pub fn run(
     let registry = crate::rules::registry();
     let total_rules = registry.len();
 
-    // Detect phase (main thread, sequential — trivial cost).
+    // Detect phase (main thread, sequential, trivial cost).
     let mut ready: Vec<Option<Box<dyn crate::rules::Rule>>> = Vec::with_capacity(total_rules);
     let mut results: Vec<Option<RuleResult>> = Vec::with_capacity(total_rules);
     for rule in registry {
@@ -180,7 +180,7 @@ pub fn run(
     let ready_total = ready.iter().filter(|r| r.is_some()).count();
 
     // Scan phase: one scoped thread per Ready rule (consumers never block
-    // pool workers — no jwalk busy-deadlock). Results collected indexed by
+    // pool workers, no jwalk busy-deadlock). Results collected indexed by
     // registry position: parallel completion, deterministic output order.
     let done_counter = Arc::new(AtomicU64::new(0));
     let scans: Vec<Option<Result<RuleScan, String>>> = std::thread::scope(|scope| {
@@ -190,7 +190,7 @@ pub fn run(
             .map(|(rule_slot, _result_slot)| {
                 let rule = rule_slot.as_ref()?;
                 // Ready rules have a `None` results slot until assembly
-                // fills it — take the id from the rule itself.
+                // fills it, take the id from the rule itself.
                 let id = rule.id();
                 let svc = &svc;
                 let done_counter = &done_counter;
@@ -282,7 +282,7 @@ pub fn run(
     }
 
     // Totals: reclaimable = Σ applied bytes (already net of overlaps);
-    // regular = Σ applied Safe bytes (config-preset includes arrive M3 —
+    // regular = Σ applied Safe bytes (config-preset includes arrive M3;
     // identical to reclaimable in M1).
     let reclaimable_bytes: u64 = results
         .iter()

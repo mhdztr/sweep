@@ -1,4 +1,4 @@
-//! Hand-rolled scan table (comfy-table is kept as a dependency but unused —
+//! Hand-rolled scan table (comfy-table is kept as a dependency but unused;
 //! plan §2.15 settles on a hand-rolled ANSI/emoji-aware renderer + unicode-width).
 //! Spec: plan §2.15; copy: `docs/CLI-UX.md` §2.1 (mock) / §8 (tier glyphs).
 
@@ -148,7 +148,7 @@ fn render_line(cells: &[Cell], widths: &[usize], theme: &Theme) -> String {
 }
 
 /// Border row: unicode box-drawing (`┌┬┐├┼┤└┴┘`, `─`) or ASCII (`+`, `-`)
-/// when `theme.unicode` is false — plan §2.15/§4 require `+-+|` in the ascii
+/// when `theme.unicode` is false, plan §2.15/§4 require `+-+|` in the ascii
 /// golden (`--no-unicode` must emit no box-drawing glyphs at all).
 fn border_line(kind: BorderKind, widths: &[usize], unicode: bool) -> String {
     let mut line = String::from(" ");
@@ -266,7 +266,7 @@ fn fit_widths(mut widths: [usize; 5], budget: usize) -> [usize; 5] {
     widths
 }
 
-/// `render_scan_table` — width >= 100: full `tier | category | location |
+/// `render_scan_table`, width >= 100: full `tier | category | location |
 /// size | files` table (one separator row after the header only); 60–99:
 /// `tier | category | size` (category shrinks + ellipsis, location/notes
 /// dropped); < 60: two-line compact rows. `-v` appends per-rule detail lines
@@ -487,7 +487,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
 fn render_compact(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     for r in results {
         let tier = format!("{} {}", r.tier.glyph(), r.tier.label());
-        // "  {tier}  {category}" — category shrinks to fit, location/notes
+        // "  {tier}  {category}", category shrinks to fit, location/notes
         // dropped (visible via `-v`).
         let room = width.saturating_sub(4 + display_width(&tier) + 2);
         out.push_str(&format!(

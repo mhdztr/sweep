@@ -1,7 +1,7 @@
 //! The prunable directory walker. Spec: plan §2.7.
 //!
 //! Deviation D-2: directories contribute **0 bytes** (files + symlinks only;
-//! symlinks are 0-byte files, never followed). `du` counts dir inode sizes —
+//! symlinks are 0-byte files, never followed). `du` counts dir inode sizes;
 //! du-comparison tolerances must cover `dirs × 4096`.
 
 use crate::scan::ScanEvent;
@@ -73,14 +73,14 @@ fn kind_of(ft: &std::fs::FileType) -> EntryKind {
 }
 
 /// Subtree skip, evaluated at listing time (the subtree is neither yielded
-/// nor descended — see plan settled decision 1).
+/// nor descended, see plan settled decision 1).
 pub enum Prune {
     Keep,
     Drop(SkipKind),
 }
 pub type PruneFn = dyn Fn(&Path, &EntryInfo) -> Prune + Send + Sync;
 /// Entry-level gate: Err = counted out (still descended if dir; gates are
-/// documented as non-dir-only — rules enforce that).
+/// documented as non-dir-only, rules enforce that).
 pub type GateFn = dyn Fn(&Path, &EntryInfo) -> Result<(), SkipKind> + Send + Sync;
 
 /// jwalk client_state payload: one lstat per entry, mtime/dev/len stashed in
@@ -88,7 +88,7 @@ pub type GateFn = dyn Fn(&Path, &EntryInfo) -> Result<(), SkipKind> + Send + Syn
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StatInfo {
     pub len: u64,
-    /// 0 = unknown (pathological epoch-0 mtimes are treated as unknown —
+    /// 0 = unknown (pathological epoch-0 mtimes are treated as unknown;
     /// conservative for age gates).
     pub mtime_unix: i64,
     /// 0 = unknown (a real Linux st_dev is never 0).
@@ -113,7 +113,7 @@ pub struct WalkOptions {
 }
 
 impl WalkOptions {
-    /// The pool MUST be supplied (one per scan run) — there is no Default on
+    /// The pool MUST be supplied (one per scan run), there is no Default on
     /// purpose: defaulting would silently build a second pool.
     pub fn new(pool: Arc<rayon::ThreadPool>) -> Self {
         WalkOptions {
@@ -137,7 +137,7 @@ pub struct WalkStats {
     /// Newest COUNTED entry (files, symlinks AND dirs).
     pub newest: Option<SystemTime>,
     /// First ≤ max_samples counted paths, walk order (sorted). The root
-    /// itself is counted (dirs) but never sampled — samples preview
+    /// itself is counted (dirs) but never sampled, samples preview
     /// reclaimable content.
     pub samples: Vec<PathBuf>,
     pub skipped: BTreeMap<SkipKind, u64>,
@@ -180,7 +180,7 @@ pub enum ScanError {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[error("directory walk busy (pool saturated) — {0}")]
+    #[error("directory walk busy (pool saturated): {0}")]
     Busy(String),
 }
 
@@ -230,7 +230,7 @@ impl SkipCounters {
 /// Read-only walk of ONE root. Mutates nothing.
 ///
 /// Depth semantics: the root is counted unconditionally (`dirs += 1`, 0
-/// bytes) — prune/mount/gate never apply to it. Newest includes the root's
+/// bytes), prune/mount/gate never apply to it. Newest includes the root's
 /// mtime (it is a counted entry).
 pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
     // Root check: lstat; a root symlink is followed once for the root itself
@@ -279,7 +279,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
                 children.clear();
                 return;
             }
-            // Deterministic order (also makes samples order deterministic) —
+            // Deterministic order (also makes samples order deterministic);
             // do NOT rely on a jwalk builder sort(); sort here.
             children.sort_by(|a, b| match (a, b) {
                 (Ok(x), Ok(y)) => x.file_name.cmp(&y.file_name),
@@ -312,7 +312,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
                             // non-root entry we cannot lstat (EACCES on a
                             // list-only parent, TOCTOU deletion) has no
                             // measurable size/age/mtime, so a later `clean`
-                            // could not verify it either — drop it instead of
+                            // could not verify it either, drop it instead of
                             // inflating `files` (honesty: counts reflect what
                             // a clean could reclaim). Still counted once in
                             // `stats.errors` above.
@@ -351,7 +351,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
                         Prune::Keep => {}
                     }
                 }
-                // One lstat per entry total — mtime/dev/len reused by the
+                // One lstat per entry total, mtime/dev/len reused by the
                 // consumer via client_state.
                 entry.client_state = Some(stat_info(len, mtime, dev));
                 true
@@ -360,7 +360,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         .parallelism(jwalk::Parallelism::RayonExistingPool {
             pool: opts.pool.clone(),
             // Hang guard: consumers run outside the pool, so saturation here
-            // is pathological — degrade the rule, never hang.
+            // is pathological, degrade the rule, never hang.
             busy_timeout: Some(Duration::from_secs(5)),
         });
 
@@ -371,7 +371,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
     loop {
         // Cancel checked at the TOP of the loop (before pulling the next
         // entry) so a pre-set cancel yields partial=true with zero counters
-        // — including before the root is consumed.
+        // including before the root is consumed.
         if opts.cancel.load(Ordering::Relaxed) {
             stats.partial = true;
             break;
@@ -388,7 +388,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
             }
         };
         // A directory listing failure (EACCES/TOCTOU) attaches to the dir's
-        // own Ok entry as `read_children_error` — count it as a per-entry
+        // own Ok entry as `read_children_error`, count it as a per-entry
         // error (the walk continues).
         if entry.read_children_error.is_some() {
             stats.errors += 1;
@@ -429,7 +429,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         if info.depth > 0 {
             // Gate (newer-than-cutoff logic lives in the rule's closure, not
             // here). A gated dir would still be descended if one ever
-            // occurred — gates are documented as non-dir-only.
+            // occurred, gates are documented as non-dir-only.
             if let Some(gate) = &opts.gate
                 && let Err(kind) = gate(&entry.path(), &info)
             {

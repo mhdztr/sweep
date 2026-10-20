@@ -1,4 +1,4 @@
-# sweep — Roadmap (the *sequence*)
+# sweep: Roadmap (the *sequence*)
 
 Milestones are strictly ordered; each has an **acceptance gate** that must pass
 before the next begins. Status: `[ ] not started · [~] in progress · [x] done`.
@@ -11,7 +11,7 @@ before the next begins. Status: `[ ] not started · [~] in progress · [x] done`
 
 ---
 
-## M0 — Scaffold + context docs
+## M0: Scaffold + context docs
 **Goal:** repo exists at `~/Projects/sweep`, builds, CI green, all context MDs in place.
 **Depends on:** plan approval (done).
 
@@ -33,13 +33,13 @@ Tasks:
 - [x] All 8+ docs exist at planned paths; `AGENTS.md` lists real build/test commands.
 - [x] `sweep --version` → `sweep 0.1.0`.
 
-## M1 — Scan engine + `sweep scan`
+## M1: Scan engine + `sweep scan`
 **Goal:** read-only, trustworthy, pretty measurement.
 **Depends on:** M0.
 
 Tasks:
 - [x] `Ctx` build: config load (defaults-only path), `GlobalFlags`, `run_id`, lock acquire
-- [x] `system/`: `SystemCtx` minimal (distro id + fstype via statvfs/mounts) — full detect in M5
+- [x] `system/`: `SystemCtx` minimal (distro id + fstype via statvfs/mounts), full detect in M5
 - [x] `scan/walker.rs`: jwalk+rayon, symlink-safe, mount-bounded, protected-list
       hook, mtime/newest tracking, samples(20), progress mpsc, cancellation token
 - [x] `rules/mod.rs`: `Rule` trait, `Tier`, `Detect`, registry; first 4 rules:
@@ -66,10 +66,10 @@ Tasks:
 - [x] Golden snapshots pass; sandbox manifest proves zero mutations.
 - [x] All 4 rules have exact byte/count tests.
 
-## M1.5 — Repo hardening + CI/CD foundation (infra only)
+## M1.5: Repo hardening + CI/CD foundation (infra only)
 
 **Goal:** make every future push verified beyond fmt/clippy/test, and scaffold a
-repeatable release path — **without changing `sweep` behavior**.
+repeatable release path, **without changing `sweep` behavior**.
 **Depends on:** M1. **Detail:** `docs/CI-CD.md` (plan of record).
 
 Tasks:
@@ -91,17 +91,17 @@ Tasks:
       `homepage`, `rust-version` discovered with `cargo msrv`).
 - [x] `release.yml` scaffold: tag `v*` + `workflow_dispatch` dry run; build
       matrix (x86_64 gnu + static musl, aarch64 gnu); archives, `.sha256`, SBOM,
-      SLSA provenance — publishes nothing without a tag.
+      SLSA provenance, publishes nothing without a tag.
 - [x] `packaging/` layout + `packaging.yml` skeleton (actionlint lives in
       `security.yml` per CI-CD.md §5 decision G; shellcheck here; the PKGBUILD
-      job is skipped until M7 files exist — nothing to validate
+      job is skipped until M7 files exist, nothing to validate
       before release artifacts do).
 - [x] Point `AGENTS.md`, `CONTEXT.md`, `docs/MASTER-PLAN.md`, and
       `docs/ARCHITECTURE.md` at `docs/CI-CD.md`.
 
 **Acceptance gate:**
 - [ ] New workflows pass on a PR; `actionlint` clean. (actionlint is locally
-      clean; the PR run is pending — maintainer.)
+      clean; the PR run is pending, maintainer.)
 - [x] `cargo deny check` green with a reviewed allowlist (every ignore dated and
       justified); `cargo machete` green with milestone comments. (Both verified
       locally 2026-10-20; two dated `unmaintained` ignores documented in
@@ -113,25 +113,25 @@ Tasks:
       exist (the AUR job activates at M7).
 - [ ] Branch and tag protection active; Dependabot opens its first grouped PR.
 
-## M2 — Interactive clean + full safe tier
+## M2: Interactive clean + full safe tier
 **Goal:** the daily-driver loop works end-to-end for all 11 safe rules.
 **Depends on:** M1.5.
 
 Tasks:
-- [x] UI glyph cleanup: no emoji in any output — tier glyphs are ASCII
+- [x] UI glyph cleanup: no emoji in any output, tier glyphs are ASCII
       `+ ! #` unconditionally; width math + golden snapshots updated; README
       tier bullets plus CLI-UX/RULES-CATALOG/SAFETY examples updated in the
       same commit (decision D13). Done in R8.
 - [ ] `ui/checklist.rs`: hand-rolled prompt loop (D14; `inquire` not used) + keybindings
-      (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled/report-only)
-      — core (Selection, renderer-agnostic, tests) landed R9; renderer/event loop pending.
+      (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled/report-only).
+      The renderer-agnostic core (Selection, tests) landed R9; renderer/event loop pending.
       R9 covers: tier ordering with report-only rows last, sticky `--i-know-what-im-doing`
       across preset cycles, guard precedence (`!applied` wins → `Disabled`; guarded
       destructive stays locked outside `full`).
 - [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection
-      preview over safe+caution+destructive — no destructive run happens before M4)
+      preview over safe+caution+destructive, no destructive run happens before M4)
 - [ ] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths
 - [ ] `exec/`: `del.rs` primitives (bottom-up, no-follow, prefix re-check, hot-skip),
       plan execution sequential, continue-on-error, per-rule Report
@@ -151,7 +151,7 @@ Tasks:
 - Guard tests prove firefox-running → refused at execute (with P6 override path).
 - `--dry-run` byte-identical sandbox assertion holds for a full clean.
 
-## M3 — Caution rule library
+## M3: Caution rule library
 **Goal:** all 9 selectable caution rules implemented with list-first confirms.
 **Depends on:** M2.
 
@@ -161,7 +161,7 @@ Tasks:
       `orphans` (list + batched argv + exclude), `flatpak-unused` (dry-run parse + split pass)
 - [ ] `rules/containers.rs`: `docker` (df JSON parse, 4 sub-rows, volume typed gate P5),
       `podman` (image/buildcache/stopped sub-rows, rootless/rootful pass split)
-- [ ] `rules/dev.rs`: `dev-artifacts` — single home walk, recursive-newest tracking,
+- [ ] `rules/dev.rs`: `dev-artifacts`, single home walk, recursive-newest tracking,
       progress, top-20 preview, self-exclusion, exclude_paths
 - [ ] `rules/steam.rs`: `steam-shader`
 - [ ] `rules/snapshots.rs`: `snapshots-report` (report-only; never enters Plan)
@@ -175,7 +175,7 @@ Tasks:
 - dev-artifacts: fixture proves 30d boundary, `.git` boundary, self-exclusion, excludes.
 - docker volume gate proven to require typed word (unit test on gate logic).
 
-## M4 — Destructive tier + gating + history
+## M4: Destructive tier + gating + history
 **Goal:** full purge exists, is dramatic, and is safe.
 **Depends on:** M3.
 
@@ -196,7 +196,7 @@ Tasks:
   mistype aborts with zero mutations (sandbox manifest).
 - History rows match runs; pruning boundaries tested.
 
-## M5 — System pass + environment + doctor
+## M5: System pass + environment + doctor
 **Goal:** sudo is single, honest, tamper-checked; distros handled; diagnostics exist.
 **Depends on:** M4.
 
@@ -218,7 +218,7 @@ Tasks:
 - Mixed selection = exactly one elevation (verified by counting `sudo` invocations in test double).
 - Ubuntu + Fedora VM/manual pass: correct rule subset + doctor explanations.
 
-## M6 — Extensibility + scriptability + `top`
+## M6: Extensibility + scriptability + `top`
 **Goal:** power users extend; scripts integrate.
 **Depends on:** M5.
 
@@ -237,7 +237,7 @@ Tasks:
 - A TOML-only rule appears in checklist and cleans correctly (integration test).
 - Every error string in CLI-UX §5 exists verbatim (snapshot).
 
-## M7 — Ship (v0.1.0)
+## M7: Ship (v0.1.0)
 **Goal:** installable on a fresh Arch box, zero-config, documented.
 **Depends on:** M6.
 
@@ -256,11 +256,11 @@ Tasks:
       `cargo audit bin` on the shipped binaries.
 - [ ] README final: install (AUR/manual), quickstart, presets, safety section
       (link SAFETY.md), rule table (generated), FAQ (Downloads? timer? sudo? trash?)
-- [ ] Manual test matrix: Arch (btrfs+snapper), Arch (ext4), Ubuntu LTS, Fedora —
+- [ ] Manual test matrix: Arch (btrfs+snapper), Arch (ext4), Ubuntu LTS, Fedora;
       checklist recorded in release notes
 - [ ] Tag `v0.1.0`
 
-**Explicitly out of scope:** Flatpak packaging (D11 — sandbox has a private
+**Explicitly out of scope:** Flatpak packaging (D11, sandbox has a private
 `/tmp`, no sudo, no pacman/systemd; revisit only post-1.0 with a home-only
 scope). Do not add Flatpak packaging or CI.
 
@@ -305,5 +305,5 @@ Fullscreen ncdu-style browser · `/` filter in checklist · plugin binaries/WASM
 i18n · Nix flake / Homebrew · `sweep watch` · apt `autoremove`-equivalent orphan
 rule · persistent size cache between runs · `--json` streaming events · shell
 prompt segment helper · **Flatpak packaging** (D11: sandbox has a private `/tmp`,
-no sudo, no pacman/systemd — revisit post-1.0 only) · crates.io publishing ·
+no sudo, no pacman/systemd, revisit post-1.0 only) · crates.io publishing ·
 `.deb`/`.rpm` via `nfpm`.

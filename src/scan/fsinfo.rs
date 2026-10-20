@@ -1,5 +1,5 @@
 //! Read-only system probes: statvfs, root fstype, hostname.
-//! All failures are `io::Result` — callers degrade, never panic.
+//! All failures are `io::Result`, callers degrade, never panic.
 
 use std::path::Path;
 
@@ -27,7 +27,7 @@ pub fn statvfs_totals(path: &Path) -> std::io::Result<(u64, u64)> {
     Ok((total, total.saturating_sub(avail)))
 }
 
-/// Filesystem type of `/` — parses `/proc/self/mountinfo` (field before `-`
+/// Filesystem type of `/`, parses `/proc/self/mountinfo` (field before `-`
 /// for mountpoint `/`); falls back to `/proc/mounts`, then `"unknown"`.
 pub fn root_fstype() -> std::io::Result<String> {
     if let Ok(s) = fstype_from("/proc/self/mountinfo", true) {

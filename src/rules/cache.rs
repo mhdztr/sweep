@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// 5-minute hot window: depth-1 entries touched within it are excluded
-/// (scan honesty — a file still being written is not reclaimable). Hot-skip
+/// (scan honesty, a file still being written is not reclaimable). Hot-skip
 /// is depth-1 only; per-entry checks at execution land in M2 (plan §7 risk 8).
 const HOT_WINDOW: Duration = Duration::from_secs(300);
 
@@ -116,7 +116,7 @@ impl Rule for ThumbnailsRule {
         if !ctx.home.join(".cache/thumbnails").is_dir() {
             return Detect::NotApplicable {
                 // Truthful: the rule's ROOT is `~/.cache/thumbnails`, not
-                // `~/.cache` — `~/.cache` may well exist (critic finding).
+                // `~/.cache`, `~/.cache` may well exist (critic finding).
                 reason: "~/.cache/thumbnails not found".to_string(),
             };
         }

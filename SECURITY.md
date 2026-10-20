@@ -27,7 +27,7 @@ Include, when known:
 - any proposed fix.
 
 If private reporting is unavailable on the repository, open an issue asking
-for contact details only — never include vulnerability details in it.
+for contact details only, never include vulnerability details in it.
 
 ## Response expectations
 

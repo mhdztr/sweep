@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **M1.5 — repo hardening + CI/CD foundation (infra only, no `sweep` behavior
+- **M1.5, repo hardening + CI/CD foundation (infra only, no `sweep` behavior
   change):**
   - `ci.yml` restructured into `fmt`, `clippy`, `test`, `doctest`, `docs`,
     `release-build`, and `msrv` jobs with `--locked`, timeouts,

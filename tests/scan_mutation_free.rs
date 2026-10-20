@@ -1,4 +1,4 @@
-//! Safety invariant 2 (AGENTS.md) / plan §4: `scan` mutates nothing —
+//! Safety invariant 2 (AGENTS.md) / plan §4: `scan` mutates nothing;
 //! library and CLI level, proven with a before/after filesystem manifest.
 //!
 //! No process-env mutation here: the library test uses `Ctx::for_test(home)`

@@ -33,7 +33,7 @@ pub fn format_bytes(bytes: u64) -> String {
     }
 }
 
-/// `<60 s` → `"{s}s"`; `<48 h` → `"{h}h"` (at least 1h — anything past a
+/// `<60 s` → `"{s}s"`; `<48 h` → `"{h}h"` (at least 1h, anything past a
 /// minute reads as hours); else `"{d}d"`; `None` → `"never"`.
 pub fn format_age(age: Option<Duration>) -> String {
     let Some(d) = age else {

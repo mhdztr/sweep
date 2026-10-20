@@ -1,6 +1,6 @@
-# sweep — CI/CD, security, and distribution
+# sweep: CI/CD, security, and distribution
 
-> **STATUS: foundation IMPLEMENTED (M1.5, 2026-10-20) — release/AUR parts
+> **STATUS: foundation IMPLEMENTED (M1.5, 2026-10-20); release/AUR parts
 > PLANNED.** All five workflows exist: `ci.yml` (fmt / clippy / test /
 > doctest / docs / release-build / msrv), `security.yml` (deny, machete,
 > actionlint, typos, dependency-review), `scheduled.yml` (CodeQL, Scorecard,
@@ -9,7 +9,7 @@
 > `CHANGELOG.md`, and `.github/dependabot.yml` are in place. Still planned
 > for **M7**: PKGBUILDs + `.SRCINFO`, the optional `aur` job, and the first
 > real tag. GitHub-side settings (branch/tag protection, secret scanning,
-> `release` environment reviewer) are maintainer steps — see §8 and
+> `release` environment reviewer) are maintainer steps; see §8 and
 > `ROADMAP.md`. Unchecked tasks live in `ROADMAP.md`; this file holds the
 > detail so a future session does not have to re-derive it.
 >
@@ -34,7 +34,7 @@
 
 **Non-goals (for 0.1)**
 
-- Flatpak packaging (D11 — sandbox conflicts, §7.3).
+- Flatpak packaging (D11: sandbox conflicts, §7.3).
 - crates.io publishing (§7.4).
 - Windows/macOS CI (the crate is Linux-only by design).
 - A coverage *gate* (report first; a percentage gate rewards line-touching over
@@ -108,7 +108,7 @@ Shared conventions for every workflow:
 
 ---
 
-## 4. `ci.yml` — correctness gate
+## 4. `ci.yml`: correctness gate
 
 | Job | Command(s) | Notes |
 |---|---|---|
@@ -133,7 +133,7 @@ Rules:
 
 ---
 
-## 5. `security.yml` — "is anything vulnerable?"
+## 5. `security.yml`: "is anything vulnerable?"
 
 | Check | Tool | Finds | Blocking? |
 |---|---|---|---|
@@ -175,14 +175,14 @@ full (GitHub-owned) `v5.0.0` tag.
   advisory, why it does not apply, and the date.
 
 **Implementation note (M1.5):** the first real run surfaced two `unmaintained`
-advisories — `fxhash` (RUSTSEC-2025-0057, via `inquire`) and `number_prefix`
+advisories: `fxhash` (RUSTSEC-2025-0057, via `inquire`) and `number_prefix`
 (RUSTSEC-2025-0119, via `indicatif`). Both were ignored with dated
 justifications and follow-up hooks; neither is a vulnerability advisory.
 
 **Update (R7, 2026-10-20):** the first Dependabot cargo group PR retired both
 ignores. `indicatif` 0.18 dropped `number_prefix` and `inquire` 0.9 dropped
 `fxhash`, so neither advisory crate is in the graph any more and cargo-deny
-flagged the `ignore` entries as dead. `[advisories] ignore` is now empty — the
+flagged the `ignore` entries as dead. `[advisories] ignore` is now empty; the
 list stays empty unless a future advisory genuinely reaches the graph. The
 `[bans]` duplicate warning is the expected `unicode-width` pair (0.1.x via
 indicatif, 0.2.x direct). The config uses cargo-deny 0.20's version-2 format,
@@ -198,7 +198,7 @@ planned-but-unused entries at M1.5 (implemented):
 | `inquire` | M2 (checklist) | ignore, comment "M2" |
 | `comfy-table` | possibly never (hand-rolled renderer won) | ignored pending M2: decide remove vs keep |
 | `clap_mangen` | M7 (man page) | ignore, comment "M7" |
-| `clap_complete` | **used since M1** (`sweep completion <shell>`, `src/cli/mod.rs`) | **not** flagged, no ignore needed — the earlier draft of this table was stale |
+| `clap_complete` | **used since M1** (`sweep completion <shell>`, `src/cli/mod.rs`) | **not** flagged, no ignore needed; the earlier draft of this table was stale |
 
 The ignore list must shrink as milestones land. Any ignore without a milestone
 comment is itself a review failure.
@@ -212,7 +212,7 @@ the human-readable source of truth.
 
 `security.yml` runs on PRs, a weekly cron, and `workflow_dispatch`:
 
-- full deny checks (advisories, licenses, bans, sources) — new CVEs appear
+- full deny checks (advisories, licenses, bans, sources); new CVEs appear
   without a single commit;
 - `cargo-machete`, `actionlint`, `typos`;
 - `dependency-review` on PRs only.
@@ -226,7 +226,7 @@ the human-readable source of truth.
 
 ---
 
-## 6. `release.yml` — tag-gated publishing
+## 6. `release.yml`: tag-gated publishing
 
 ### 6.1 Trigger and dry-run
 
@@ -300,7 +300,7 @@ job also writes one aggregate `checksums.sha256` covering all archives.
 
 ## 7. Distribution
 
-### 7.1 AUR — primary channel
+### 7.1 AUR: primary channel
 
 Two packages, in order. The AUR repo name **must** equal `pkgname`; each is a
 separate git repo.
@@ -322,7 +322,7 @@ PKGBUILD requirements:
 - `sweep` (source): `depends=('gcc-libs')`, `makedepends=('cargo' 'rust')`,
   `source=("sweep-v$pkgver-src.tar.gz::$url/releases/download/v$pkgver/sweep-v$pkgver-src.tar.gz")`;
   `build()`/`check()` `cd "$srcdir/sweep-v$pkgver"`. `build()` runs
-  `cargo build --release --locked` — **not** `--frozen` (`--frozen` implies
+  `cargo build --release --locked`, **not** `--frozen` (`--frozen` implies
   offline and fails without a populated registry cache). `check()` runs
   `cargo test --release --locked`.
 - `package()` installs `usr/bin/sweep`; from M7 also
@@ -345,19 +345,19 @@ never run on forks.
   `sweep-v<ver>-<target>/`; the source tarball extracts to `sweep-v<ver>/`.
 - Every archive gets a `.sha256` and a build-provenance attestation.
 - `cargo auditable` metadata must survive stripping. ~~The current release
-  profile sets `strip = true`~~ — **M1.5 changed it to `strip = "debuginfo"`**
+  profile sets `strip = true`~~; **M1.5 changed it to `strip = "debuginfo"`**
   so the audit section survives; the release job's `audit-bin` step
   (`cargo audit bin` on the musl binary) proves it on every tag.
 
-### 7.3 Flatpak — DEFERRED (decision D11)
+### 7.3 Flatpak: DEFERRED (decision D11)
 
 **Not packaged for 0.1, and not planned before 1.0.** This is a product decision,
 not a scheduling one:
 
 - Flatpak gives the app a **private `/tmp`**; scanning the host's `/tmp` is wrong
   or requires `--filesystem=/tmp`.
-- There is **no sudo** inside the sandbox. System targets — `/var/cache`,
-  systemd journal vacuuming, pacman cache, rootful docker/podman — are
+- There is **no sudo** inside the sandbox. System targets (`/var/cache`,
+  systemd journal vacuuming, pacman cache, rootful docker/podman) are
   unreachable by design.
 - `$HOME` access needs `--filesystem=home`, which Flathub reviews closely; a
   tool that can delete anything in home will draw exactly that scrutiny.
@@ -373,13 +373,13 @@ real demand; if reopened, the plan is: app ID `io.github.mhdztr.sweep`,
 even for CLI on Flathub), `finish-args` limited to `--filesystem=home`, and no
 CI until the manifest exists.
 
-### 7.4 crates.io — deferred
+### 7.4 crates.io: deferred
 
 `cargo install --path .` remains documented for local builds. Publishing to
 crates.io is not a distribution strategy for a root-capable cleaner and adds
 release surface; revisit only on demand.
 
-### 7.5 Other channels — post-1.0
+### 7.5 Other channels: post-1.0
 
 `.deb`/`.rpm` via `nfpm`, and nothing else. AppImage adds nothing for a CLI.
 
@@ -408,7 +408,7 @@ One-time GitHub settings (not YAML):
 - **Dependency graph must be enabled** (Settings > Security > Advanced
   Security) before `dependency-review` can run. Without it every PR fails
   `dependency-review` with "Dependency review is not supported on this
-  repository" — a settings gap, not a code failure. Enable it first, then
+  repository": a settings gap, not a code failure. Enable it first, then
   enable Dependabot alerts; the two share the same graph.
 - Branch protection on `main`: require `fmt`, `clippy`, `test`, `doctest`,
   `docs`, `release-build`, and `deny`; require a PR; dismiss stale approvals;
@@ -435,10 +435,10 @@ Repository files for the foundation (M1.5):
 
 | Phase | When | Work |
 |---|---|---|
-| **0 — foundation** | now, before M2 | Infra only, no product code: CI restructure, `deny.toml` + security workflow, Dependabot, repo settings, `SECURITY.md`, `CHANGELOG.md`, Cargo metadata, `release.yml` scaffold, `packaging/` layout + `packaging.yml` skeleton (PKGBUILDs land at M7). |
-| **1 — while M2/M3 land** | during | Keep the gate green; real docs-sync check at M3 (`rules list` snapshot); coverage report (not a gate); CodeQL/Scorecard scheduled; shrink machete ignores as deps get used. |
-| **2 — ship (M6/M7)** | before 0.1.0 | Final `release.yml` (SBOM, provenance, `cargo auditable`), PKGBUILDs, `packaging.yml` green, tag `v0.1.0`, publish `sweep-bin` then `sweep`. |
-| **3 — post-1.0** | later | Flatpak reconsideration (home-only), `.deb`/`.rpm`, crates.io only if demanded. |
+| **0: foundation** | now, before M2 | Infra only, no product code: CI restructure, `deny.toml` + security workflow, Dependabot, repo settings, `SECURITY.md`, `CHANGELOG.md`, Cargo metadata, `release.yml` scaffold, `packaging/` layout + `packaging.yml` skeleton (PKGBUILDs land at M7). |
+| **1: while M2/M3 land** | during | Keep the gate green; real docs-sync check at M3 (`rules list` snapshot); coverage report (not a gate); CodeQL/Scorecard scheduled; shrink machete ignores as deps get used. |
+| **2: ship (M6/M7)** | before 0.1.0 | Final `release.yml` (SBOM, provenance, `cargo auditable`), PKGBUILDs, `packaging.yml` green, tag `v0.1.0`, publish `sweep-bin` then `sweep`. |
+| **3: post-1.0** | later | Flatpak reconsideration (home-only), `.deb`/`.rpm`, crates.io only if demanded. |
 
 ---
 

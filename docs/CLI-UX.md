@@ -1,4 +1,4 @@
-# sweep — CLI & Terminal UX (the *interface*)
+# sweep: CLI & Terminal UX (the *interface*)
 
 Complete command reference, prompt copy catalog, mock outputs, exit codes, env vars,
 tokens. Every string here is what ships (golden snapshots enforce it).
@@ -35,7 +35,7 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 | `-v` / `--verbose`, `-q` / `--quiet` | `SWEEP_VERBOSE` | verbosity |
 | `-h` / `--help`, `-V` / `--version` | – | clap-standard |
 
-> **M1 note — `--color <auto|always|never>` is documented but not implemented
+> **M1 note: `--color <auto|always|never>` is documented but not implemented
 > yet.** The flag (`ColorChoice`, plan §2.6) is deferred to M-next: M1 ships
 > no such clap argument, so the row above is the v0.1 contract, not current
 > behavior. Color in M1 is controlled by `--no-color` / `NO_COLOR` /
@@ -84,13 +84,13 @@ Output mock (wide):
 Exit: 0 (always, unless error → 1).
 
 Notes:
-- Table rows may append a dim `(…)` note inside the category cell — age-gate / overlap
+- Table rows may append a dim `(…)` note inside the category cell: age-gate / overlap
   counts (`tmp & var-tmp  (1 newer than keep-days kept)`, `user caches  (excl. thumbnails)`).
   M1's goldens show the 4-rule output (tmp & var-tmp, user caches, thumbnails, trash).
 - `-v` adds per-rule detail lines after the table.
 
 ### 2.2 `sweep clean`
-**Purpose:** the main flow — scan → select → gate → execute → report.
+**Purpose:** the main flow: scan → select → gate → execute → report.
 **Flags:** all globals + `--preset <p>` · `--only <id,id>` · `--exclude <id,id>` ·
 `--no-prompt` (alias of `--yes`, requires non-destructive selection or
 `--i-know-what-im-doing`).
@@ -115,8 +115,8 @@ progress → summary card (§2.2b) → history append.
   ╰──────────────────────────────────────────────────────╯
 ```
 Variants: partial failure adds `warn 2 errors (see log)` (exit 3); aborted gate adds
-`— aborted, nothing was deleted` (exit 2); dry-run adds `— dry run, nothing changed`;
-trash mode adds `moved to trash — empty trash to actually free the space`.
+`aborted, nothing was deleted` (exit 2); dry-run adds `dry run, nothing changed`;
+trash mode adds `moved to trash; empty trash to actually free the space`.
 
 ### 2.3 `sweep top`
 **Purpose:** biggest dirs/files report (decision support).
@@ -177,7 +177,7 @@ Exit 0; each line degrades to `unavailable (reason)` instead of vanishing.
   downloads           destructive  -     full      locked (purge gate)
   snapshots-report    report       -     -         ready (btrfs, 48 snaps)
 ```
-Unknown id given elsewhere (`--only bogus`) → exit 1 with `unknown rule 'bogus' — did you mean 'trash'?` (edit-distance suggestion).
+Unknown id given elsewhere (`--only bogus`) → exit 1 with `unknown rule 'bogus'; did you mean 'trash'?` (edit-distance suggestion).
 
 ### 2.7 `sweep config`
 ```
@@ -225,13 +225,13 @@ hint "switch preset to full (p)") · `disabled by config` (gray, unselectable,
 shows `disabled in config`) · `report-only` (info row, no checkbox).
 
 ### 3.4 Live total bar
-`  4 selected · 13.3 GiB  ·  2 guarded · 1 locked` — recompute <16 ms (pre-aggregated).
+`  4 selected · 13.3 GiB  ·  2 guarded · 1 locked`; recompute <16 ms (pre-aggregated).
 
 ---
 
 ## 4. Gate / prompt copy catalog (exact strings)
 
-### P1 — end-of-selection summary (all tiers; **default = cancel**)
+### P1: end-of-selection summary (all tiers; **default = cancel**)
 ```
   ┌─────────────────────────────────────────────┐
   │  4 categories · 13.3 GiB will be deleted    │
@@ -241,18 +241,18 @@ shows `disabled in config`) · `report-only` (info row, no checkbox).
   └─────────────────────────────────────────────┘
   Proceed? [y/N] (cancel is default)  ▸
 ```
-Typed `y`/`Y` only — **Enter = cancel** (documented, tested).
+Typed `y`/`Y` only; **Enter = cancel** (documented, tested).
 
-### P2 — per-caution-rule confirm (shown when a caution rule selected)
+### P2: per-caution-rule confirm (shown when a caution rule selected)
 ```
-  ! pacman package cache — paccache -rk2 (sudo)
+  ! pacman package cache: paccache -rk2 (sudo)
      6.7 GiB · 310 packages · keeping newest 2 versions
      [y/N]
 ```
 List-first variants: orphans → paginated package list; flatpak → runtime list;
 docker → `docker system df` table; stopped containers/volumes → names.
 
-### P3 — typed PURGE gate (per destructive category; after P1)
+### P3: typed PURGE gate (per destructive category; after P1)
 ```
   warn DESTRUCTIVE: full downloads
     1,204 files · 22.9 GiB · newest: 2 hours ago · oldest: 3 years ago
@@ -261,30 +261,30 @@ docker → `docker system df` table; stopped containers/volumes → names.
     This is permanent. Type PURGE to confirm (Enter/cancel aborts):
   ▸ _
 ```
-Wrong text → `aborted (text mismatch) — nothing was deleted` → exit 2.
+Wrong text → `aborted (text mismatch): nothing was deleted` → exit 2.
 `--yes` at this point prints: `--yes does not confirm destructive rules; re-run
 with --preset full --i-know-what-im-doing for scripting` (exit 2).
 
-### P4 — sudo pass
+### P4: sudo pass
 ```
   System rules selected: pacman-cache, journal-system
   A single sudo elevation will run after the user-level cleanup. [y/N]
 ```
 Decline → those items reported `skipped (sudo declined)`; user pass result stands.
 
-### P5 — volume-type danger (docker volumes sub-row)
+### P5: volume-type danger (docker volumes sub-row)
 ```
   docker volumes hold DATA (databases, bind data). Type 'volumes' to confirm: ▸
 ```
 
-### P6 — running-app override
+### P6: running-app override
 ```
-  warn firefox is running — cleaning its cache now may corrupt open sessions.
+  warn firefox is running; cleaning its cache now may corrupt open sessions.
   Clean anyway? [y/N] ▸
 ```
 
-### P7 — empty / nothing results
-`nothing to clean — you're already tidy (scan found 0 reclaimable bytes in safe rules)`
+### P7: empty / nothing results
+`nothing to clean; you're already tidy (scan found 0 reclaimable bytes in safe rules)`
 
 ---
 
@@ -293,19 +293,19 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 | Situation | Message |
 |---|---|
 | not a TTY in interactive mode | `error: interactive mode requires a TTY; use --preset/--only with --yes` |
-| unknown rule id | `error: unknown rule 'bogus' — did you mean 'trash'?` (1) |
+| unknown rule id | `error: unknown rule 'bogus'; did you mean 'trash'?` (1) |
 | unknown preset | `error: invalid preset 'mega' (expected: safe, regular, full)` (1) |
 | invalid SWEEP_KEEP_DAYS | `error: invalid SWEEP_KEEP_DAYS 'abc' (expected a non-negative integer)` (1) |
 | config parse error | `error: config ~/.config/sweep/config.toml:12: invalid tier 'hot' (expected safe/caution/destructive)` (1) |
-| config unknown rule key | `error: config: unknown rule section [rules.pacman] — did you mean [rules.pacman-cache]?` (1) |
+| config unknown rule key | `error: config: unknown rule section [rules.pacman]; did you mean [rules.pacman-cache]?` (1) |
 | lock held | `error: another sweep is running (pid 1234, since 14:02)` (1) |
-| sudo unavailable mid-pass | `warning: sudo unavailable — 2 system rules skipped` + summary note (0/3 per §exit) |
-| scan path unreadable | `warning: /var/log/journal: permission denied (rule degraded)` — run continues (0) |
-| disk full during log write | `warning: cannot write history: no space left` — cleaning still reported on stdout (0) |
+| sudo unavailable mid-pass | `warning: sudo unavailable; 2 system rules skipped` + summary note (0/3 per §exit) |
+| scan path unreadable | `warning: /var/log/journal: permission denied (rule degraded)`; run continues (0) |
+| disk full during log write | `warning: cannot write history: no space left`; cleaning still reported on stdout (0) |
 | malformed `--only` csv | `error: --only expects comma-separated rule ids` (1) |
 | `--json` + interactive | `error: --json requires --yes/--only/--preset non-interactive flow` (1) |
 
-## 6. Exit codes (recap — normative)
+## 6. Exit codes (recap: normative)
 
 | code | when |
 |---|---|

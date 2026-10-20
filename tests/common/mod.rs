@@ -1,4 +1,4 @@
-//! Shared test helpers — sandboxed homes for rule tests.
+//! Shared test helpers, sandboxed homes for rule tests.
 //!
 //! Contract (see AGENTS.md): every rule test runs against a temp home via
 //! `SWEEP_HOME` with `SWEEP_TEST_GUARD=1`, which makes `env::resolve_home()`
@@ -55,7 +55,7 @@ pub fn sandbox() -> Sandbox {
 
 // ---------------------------------------------------------------------------
 // M1 scan-test helpers (plan §4). These take an explicit home path and mutate
-// NO process env — library-level tests use Ctx::for_test(home) directly.
+// NO process env, library-level tests use Ctx::for_test(home) directly.
 // ---------------------------------------------------------------------------
 
 /// Seed a file of `len` zero bytes at `home/rel`, creating parents.
@@ -107,7 +107,7 @@ pub fn scan_fixture(home: &Path) {
 }
 
 /// Recursive manifest of (kind, len, mtime_ns) keyed by absolute path.
-/// kind: 0=file, 1=dir, 2=symlink, 3=other. No atime — reads bump it.
+/// kind: 0=file, 1=dir, 2=symlink, 3=other. No atime, reads bump it.
 pub fn manifest(path: &Path) -> std::collections::BTreeMap<PathBuf, (u8, u64, u64)> {
     let mut map = std::collections::BTreeMap::new();
     collect(path, &mut map);

@@ -47,7 +47,7 @@ pub enum Detect {
         /// "~/.cache not found" (user-cache), "~/.cache/thumbnails not
         /// found" (thumbnails), "disabled in config", "/tmp and /var/tmp
         /// not found", "trash not found". Reason names the RULE'S ROOT (not
-        /// an ancestor of it) — copy-locked by tests.
+        /// an ancestor of it), copy-locked by tests.
         reason: String,
     },
 }

@@ -2,7 +2,7 @@
 //! deterministic fixture values, exit code 0.
 //!
 //! The CLI test passes env to the child process only (no process-env
-//! mutation). The tmp rule scans the REAL /tmp in the CLI case — only
+//! mutation). The tmp rule scans the REAL /tmp in the CLI case, only
 //! `>= 0` is asserted there (plan §4 risk note); home-derived rules are
 //! asserted exactly against the fixture.
 
@@ -160,7 +160,7 @@ fn cli_scan_json_required_keys_and_exit_zero() {
     let v: Value = serde_json::from_slice(&out).expect("stdout is one JSON doc");
     assert_schema_keys(&v);
 
-    // tmp scans the REAL /tmp here — only >= 0 (plan §4 risk note).
+    // tmp scans the REAL /tmp here, only >= 0 (plan §4 risk note).
     assert!(
         v["rules"][0]["bytes"].as_u64().is_some(),
         "tmp bytes is a u64 (>= 0) even against the real /tmp"

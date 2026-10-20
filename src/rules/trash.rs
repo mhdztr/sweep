@@ -1,4 +1,4 @@
-//! Rule `trash` — XDG trash (`~/.local/share/Trash/{files,info}`).
+//! Rule `trash`, XDG trash (`~/.local/share/Trash/{files,info}`).
 //! New file (D-8): added to the ARCHITECTURE §1 tree in the same commit.
 //! Spec: plan §2.12.
 

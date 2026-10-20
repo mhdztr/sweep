@@ -1,6 +1,6 @@
-# sweep — Master Plan (the *what* and *why*)
+# sweep: Master Plan (the *what* and *why*)
 
-A pretty, advanced, safety-first **storage cleaner CLI for Linux** — built in Rust,
+A pretty, advanced, safety-first **storage cleaner CLI for Linux**: built in Rust,
 deeply integrated with Arch-based distros, functional on every mainstream distro.
 
 **One-liner:** scan your system for reclaimable space → toggle categories in an
@@ -15,7 +15,7 @@ destroys everything, including the entirety of `~/Downloads`.
 |---|---|---|
 | bleachbit | GUI cleaner, GTK, flat rules | `sweep` is CLI-first, tiered/gated, rule-extensible, Arch-native (pacman/AUR/orphans) |
 | stacer | GUI system optimizer | no GUI at all; scriptable, JSON output, exit codes, systemd-timer friendly |
-| ncdu / dust | *inspect* disk usage | inspection only — `sweep top` borrows their idea but the rest is action |
+| ncdu / dust | *inspect* disk usage | inspection only, `sweep top` borrows their idea but the rest is action |
 | `paccache`, `docker system df`… | single-purpose primitives | `sweep` orchestrates all of them behind one checklist with consistent safety |
 | `rm -rf` on caches | works until it doesn't | guards, age gates, running-process checks, dry-run, logs, history |
 
@@ -47,19 +47,19 @@ destroys everything, including the entirety of `~/Downloads`.
 ## 4. Core concepts
 
 ### 4.1 Rule
-Everything cleanable is a `Rule` — an id, title, tier, glyph, and detect/scan/clean
+Everything cleanable is a `Rule`, an id, title, tier, glyph, and detect/scan/clean
 functions plus sudo/guard metadata. The registry is filtered by `detect()` against
 the environment, which is how "works everywhere, deepest on Arch" falls out of the
 design instead of being special-cased. Full specs: `RULES-CATALOG.md`.
 
 ### 4.2 Tiers of danger
-- `+` **safe** — default-checked in `regular` preset. One shared end-of-selection
+- `+` **safe**: default-checked in `regular` preset. One shared end-of-selection
   confirmation (default = cancel).
-- `!` **caution** — visible, default-*unchecked*. Per-rule confirmation showing
+- `!` **caution**: visible, default-*unchecked*. Per-rule confirmation showing
   count/samples first (orphans/docker/flatpak show their actual item lists).
-- `#` **destructive** — only selectable under the `full` preset; each requires a
+- `#` **destructive**: only selectable under the `full` preset; each requires a
   **typed `PURGE`** after a summary screen. `--yes` does not bypass (D7).
-- `~` **report-only** — snapper snapshots: measured and reported, never touched (D9).
+- `~` **report-only**: snapper snapshots: measured and reported, never touched (D9).
 
 All TUI glyphs are ASCII (D13); no emoji anywhere in rendered
 output.
@@ -103,42 +103,42 @@ never corrupts the user-level result.
 | F16 | Shell completions + man page | M7 |
 | F17 | AUR packages (`sweep-bin`, `sweep`) + verifiable release artifacts (gnu + static musl, SBOM, provenance) | M7 |
 
-### Could (explicitly parked — see ROADMAP bottom)
+### Could (explicitly parked: see ROADMAP bottom)
 Fullscreen ncdu-style browser, plugin binaries/WASM, i18n, Nix/Homebrew, `watch` mode.
 
 ## 6. User stories & acceptance scenarios
 
-**US1 — weekly Arch clean.** *As an Arch user I run `sweep clean`;* I see 13.3 GiB
+**US1, weekly Arch clean.** *As an Arch user I run `sweep clean`;* I see 13.3 GiB
 selected in safe rules, pacman cache unchecked; I check it (keep 2), leave orphans
 alone, press enter, confirm → summary shows freed + skipped ("firefox running")
 and a history entry appears.
 
-**US2 — pre-reinstall deep purge.** *I run `sweep clean --preset full`;* destructive
+**US2, pre-reinstall deep purge.** *I run `sweep clean --preset full`;* destructive
 rows unlock red; I toggle Downloads, see "1,204 files · newest 2 hours ago"; after
 selection a summary screen demands I type `PURGE`; I mistype → everything aborts,
 exit 2, nothing deleted.
 
-**US3 — fresh download rescue.** *Same run with `--keep-days 7`:* the Downloads
+**US3, fresh download rescue.** *Same run with `--keep-days 7`:* the Downloads
 preview says 37 files newer than 7 days will be preserved; after the run those 37
 remain on disk.
 
-**US4 — scripted safe clean.** *`sweep clean --preset safe --yes --json > report.json`*
+**US4, scripted safe clean.** *`sweep clean --preset safe --yes --json > report.json`*
 in a systemd timer: exit 0, `run.freed_bytes` > 0, no prompts ever (verified in CI
 by a pty-less test).
 
-**US5 — cautious dev.** *I never want my projects touched.* I check `rules list`,
+**US5, cautious dev.** *I never want my projects touched.* I check `rules list`,
 see `dev-artifacts` is caution/off by default; even when enabled it lists
 untouched->30d candidates with ages and self-excludes the sweep repo; I keep it off
 via `[presets.regular].exclude`.
 
-**US6 — no sudo.** *I decline the password prompt:* user rules stay cleaned, system
+**US6, no sudo.** *I decline the password prompt:* user rules stay cleaned, system
 rules report `skipped (sudo declined)`, output tells me exactly which.
 
-**US7 — Ubuntu laptop.** *I install it on Ubuntu:* `doctor` shows family=debian;
+**US7, Ubuntu laptop.** *I install it on Ubuntu:* `doctor` shows family=debian;
 pacman/orphans rules absent, `apt clean` rule present; scan works; I never see
 dead rules.
 
-**US8 — automation report.** *Timer runs report-only scan weekly:* journal gets the
+**US8, automation report.** *Timer runs report-only scan weekly:* journal gets the
 JSON summary; disk untouched; I review `sweep history` monthly and trigger manual
 cleans.
 
@@ -149,7 +149,7 @@ cleans.
 | GUI | scope; CLI is the product (G4) |
 | Deleting Documents/Pictures/Videos/Music/Projects | user data, never rules (SAFETY never-touch) |
 | Network operations during scan/clean | determinism, speed, offline-first; no telemetry ever |
-| Deleting btrfs snapshots | D9 — snapshots are user recovery data; report only |
+| Deleting btrfs snapshots | D9, snapshots are user recovery data; report only |
 | Managing swap/zram/TRIM | different tool category; docs mention only |
 | Auto-cleaning without explicit selection (except opt-in timer safe-preset) | would violate the core promise |
 | Package *upgrading*, kernel trimming, service management | out of cleaner scope |
@@ -183,7 +183,7 @@ cleans.
 **Compatibility promise from 1.0:** rule ids, config keys, JSON fields only *add*;
 breaking changes bump schema `version` and are listed in docs/JSON-SCHEMAS.md.
 
-**Distribution (D11):** AUR is the primary channel — `sweep-bin` (static musl
+**Distribution (D11):** AUR is the primary channel, `sweep-bin` (static musl
 release asset) first, then a source `sweep` package. GitHub Releases carry gnu
 and musl binaries with `.sha256`, a CycloneDX SBOM, and SLSA build provenance.
 Flatpak is **not** packaged before 1.0: the sandbox has a private `/tmp`, no

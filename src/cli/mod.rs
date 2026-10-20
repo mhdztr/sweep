@@ -147,7 +147,7 @@ pub enum Commands {
         shell: clap_complete::Shell,
     },
 
-    /// (internal) batched sudo system pass — invoked by sweep itself
+    /// (internal) batched sudo system pass, invoked by sweep itself
     #[command(name = "internal-system-pass", hide = true)]
     InternalSystemPass {
         #[arg(value_name = "PLAN_PATH")]
