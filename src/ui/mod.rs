@@ -1,6 +1,7 @@
 //! Terminal output: theme, header/footer, table, progress spinner.
 //! Spec: plan §2.15; copy: `docs/CLI-UX.md` §2.1 / §5.
 
+pub mod checklist;
 pub mod format;
 pub mod progress;
 pub mod table;

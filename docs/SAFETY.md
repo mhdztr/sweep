@@ -98,6 +98,10 @@ Age basis = **mtime** (newest descendant for directories). Documented limitation
 
 Guarded row = `Detect::Guarded{reason}`: pre-unchecked + shown. User override →
 P6 warning confirm. Execution re-checks (TOCTOU minimized: check right before delete).
+In the checklist core (`src/ui/checklist.rs`) guarded-ness is carried as a row
+state (`RowState::Guarded`); the `Detect::Guarded` variant is introduced with the
+guard implementations (`system/proc.rs`) and mapped to that row state by the
+scan/UI boundary.
 
 ## 6. Failure & interruption matrix
 
