@@ -6,18 +6,13 @@
 
 [advisories]
 yanked = "deny"
-ignore = [
-    # fxhash is unmaintained (RUSTSEC-2025-0057). Only reached through
-    # `inquire`, which is declared for M2 (interactive checklist) and unused
-    # in shipped code today. Follow-up: M2 re-evaluates `inquire` (upgrade
-    # once upstream drops fxhash, or drop the dependency). 2026-10-20.
-    "RUSTSEC-2025-0057",
-    # number_prefix is unmaintained (RUSTSEC-2025-0119). Only reached through
-    # `indicatif` 0.17 (progress bars). No vulnerability is reported — the
-    # advisory is maintenance-status only. Follow-up: M2 UI work re-checks
-    # whether indicatif has moved off number_prefix; revisit then. 2026-10-20.
-    "RUSTSEC-2025-0119",
-]
+# No ignores. The two entries previously here were retired on 2026-10-20 when
+# the dependency bump landed: `indicatif` 0.18 dropped `number_prefix`
+# (RUSTSEC-2025-0119 was retracted as stale by cargo-deny) and `inquire` 0.9
+# dropped `fxhash` (RUSTSEC-2025-0057 likewise). Neither crate is in the
+# dependency graph any more, so both ignores were dead entries. Keep this list
+# empty unless a future advisory genuinely reaches the graph.
+ignore = []
 
 [licenses]
 confidence-threshold = 0.9
