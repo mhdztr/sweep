@@ -1,0 +1,21 @@
+# Grouped weekly updates (docs/CI-CD.md §8). Dependabot also keeps the
+# SHA-pinned third-party actions fresh (CI-CD.md §3).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      cargo-all:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions-all:
+        patterns: ["*"]
+    open-pull-requests-limit: 5

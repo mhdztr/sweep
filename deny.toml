@@ -1,0 +1,44 @@
+# cargo-deny policy (docs/CI-CD.md §5.1). Format is cargo-deny 0.20's
+# version-2 config (there is no `version =` key in this generation).
+#
+# Every ignore/allow entry names its crate and a reason. Blanket ignores are
+# a review failure (docs/CI-CD.md §12).
+
+[advisories]
+yanked = "deny"
+ignore = [
+    # fxhash is unmaintained (RUSTSEC-2025-0057). Only reached through
+    # `inquire`, which is declared for M2 (interactive checklist) and unused
+    # in shipped code today. Follow-up: M2 re-evaluates `inquire` (upgrade
+    # once upstream drops fxhash, or drop the dependency). 2026-10-20.
+    "RUSTSEC-2025-0057",
+    # number_prefix is unmaintained (RUSTSEC-2025-0119). Only reached through
+    # `indicatif` 0.17 (progress bars). No vulnerability is reported — the
+    # advisory is maintenance-status only. Follow-up: M2 UI work re-checks
+    # whether indicatif has moved off number_prefix; revisit then. 2026-10-20.
+    "RUSTSEC-2025-0119",
+]
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",     # unicode-ident, unicode-width: license-text license, no copyleft
+    "MPL-2.0",         # option-ext via dirs-sys: weak file-level copyleft, fine for a CLI dependency
+]
+
+[bans]
+wildcards = "deny"
+# Expected first-run warning: two `unicode-width` versions (0.1.x via
+# indicatif, 0.2.x direct). Warn-only until that duplicate is reviewed
+# (docs/CI-CD.md §5.1); tighten to "deny" afterwards.
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

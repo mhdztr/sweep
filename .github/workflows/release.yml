@@ -1,0 +1,278 @@
+name: release
+
+# Tag-gated publishing scaffold (docs/CI-CD.md §6). A dry run exercises the
+# full matrix, produces archives + checksums + SBOM + attestation as workflow
+# artifacts, and publishes nothing: `preflight` and `publish` only run on a
+# real `v*` tag push. M7 adds the AUR job (deliberately not scaffolded here).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build + attest, do not publish"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Never cancel or parallelize runs of the same release (CI-CD.md §6.4).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    # Tag-push only: skipped on dry runs (CI-CD.md §6.1).
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # preflight checks that the tag is on main
+      - name: Tag matches Cargo.toml version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          echo "tag=$tag manifest=$ver"
+          test -n "$ver" && test "$tag" = "$ver"
+      - name: CHANGELOG.md has a section for this tag
+        # Keep a Changelog style: `## [0.1.0]`, optionally dated
+        # `## [0.1.0] - YYYY-MM-DD` (the same shapes publish extracts).
+        run: grep -qE "^## \[${GITHUB_REF_NAME#v}\]( - [0-9]{4}-[0-9]{2}-[0-9]{2})?$" CHANGELOG.md
+      - name: Cargo.lock is committed
+        run: git ls-files --error-unmatch Cargo.lock
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Cargo.lock is in sync with Cargo.toml
+        # `--locked` exits non-zero if the lockfile would have to change —
+        # a committed-but-stale Cargo.lock cannot ship (CI-CD.md §6.2).
+        run: cargo metadata --locked --format-version 1 > /dev/null
+      - name: No dirty or committed generated files
+        # CI-CD.md §6.2 preflight row: the tagged tree must contain no
+        # build outputs (SBOMs, dist archives) and no uncommitted changes.
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "working tree is dirty at the tag:" >&2
+            git status --porcelain >&2
+            exit 1
+          fi
+          strays="$(git ls-files -- '*.cdx.json' '*.cdx.xml' 'dist' 'dist/*')"
+          if [ -n "$strays" ]; then
+            echo "generated artifacts must not be committed:" >&2
+            printf '%s\n' "$strays" >&2
+            exit 1
+          fi
+      - name: Tag is on main
+        run: git branch -r --contains HEAD | grep -q 'origin/main'
+
+  build:
+    needs: [preflight]
+    # On a tag push, wait for a green preflight; a dispatch (dry run) always
+    # builds — preflight is skipped then (CI-CD.md §6.1).
+    if: always() && (needs.preflight.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            musl: true
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install musl toolchain
+        if: matrix.musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      # cargo-auditable embeds the dependency list in the binary so
+      # `cargo audit bin` audits what was actually built (CI-CD.md §7.2).
+      # Build steps may fetch crates and tooling (ARCHITECTURE §16).
+      # Tool installs pin exact versions (Dependabot only refreshes action
+      # SHAs; bump these deliberately, CI-CD.md §3).
+      - name: Install cargo-auditable
+        run: cargo install cargo-auditable --locked --version 0.7.7
+      - name: Auditable release build
+        run: cargo auditable build --release --locked --target "${{ matrix.target }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sweep-bin-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/sweep
+          if-no-files-found: error
+
+  package:
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: sweep-bin-*
+          path: bins
+      - name: Build target archives + .sha256
+        run: |
+          set -euo pipefail
+          ver="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          mkdir -p dist
+          for dir in bins/*/; do
+            target="$(basename "$dir")"
+            target="${target#sweep-bin-}"
+            archive="sweep-v${ver}-${target}"
+            mkdir -p "$archive"
+            install -m 755 "$dir/sweep" "$archive/sweep"
+            install -m 644 LICENSE README.md CHANGELOG.md "$archive/"
+            tar czf "dist/${archive}.tar.gz" "$archive"
+            rm -rf "$archive"
+          done
+          # Sibling .sha256 per archive (docs/CI-CD.md §6.2), then one
+          # aggregate checksums.sha256 covering every archive.
+          (cd dist && for f in *.tar.gz; do sha256sum "$f" > "$f.sha256"; done)
+          (cd dist && sha256sum ./*.tar.gz > SHA256SUMS.tmp && mv SHA256SUMS.tmp checksums.sha256)
+          (cd dist && sha256sum -c checksums.sha256)
+          # M7 adds: man page, shell completions, systemd units to the archives
+          # (docs/CI-CD.md §7.1/§7.2).
+      - name: Source tarball + .sha256
+        run: |
+          set -euo pipefail
+          ver="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          git archive --prefix="sweep-v${ver}/" -o "dist/sweep-v${ver}-src.tar.gz" HEAD
+          (cd dist && sha256sum "sweep-v${ver}-src.tar.gz" > "sweep-v${ver}-src.tar.gz.sha256")
+          (cd dist && sha256sum "sweep-v${ver}-src.tar.gz" >> checksums.sha256 && sha256sum -c checksums.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked --version 0.5.9
+      - name: Emit CycloneDX SBOM
+        # Verified against cargo-cyclonedx 0.5.9: with `--format json
+        # --describe binaries` the tool writes `sweep_bin.cdx.json` into the
+        # CWD (never `sweep-<ver>.cdx.json`; the default format is XML, so
+        # `--format json` is mandatory here). Rename to the release
+        # convention (CI-CD.md §6.2); the glob guard fails loudly if the
+        # tool's naming ever changes.
+        run: |
+          set -euo pipefail
+          ver="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          cargo cyclonedx --format json --describe binaries
+          mkdir -p dist
+          shopt -s nullglob
+          sboms=( ./*.cdx.json )
+          if [ "${#sboms[@]}" -ne 1 ]; then
+            echo "expected exactly one *.cdx.json, found ${#sboms[@]}" >&2
+            exit 1
+          fi
+          mv "${sboms[0]}" "dist/sweep-v${ver}.cdx.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: dist/*.cdx.json
+          if-no-files-found: error
+
+  audit-bin:
+    # Proves the strip = "debuginfo" decision keeps auditable metadata alive
+    # (CI-CD.md §7.2, decision H): audits the musl binary that ships.
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - uses: actions/download-artifact@v8
+        with:
+          name: sweep-bin-x86_64-unknown-linux-musl
+          path: bin
+      - name: cargo audit bin on the shipped musl binary
+        run: |
+          chmod +x bin/sweep
+          cargo audit bin ./bin/sweep
+
+  attest:
+    needs: [package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write # SLSA provenance is signed via OIDC (CI-CD.md §6.4)
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: Attest build provenance for every archive
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: "dist/*.tar.gz"
+
+  publish:
+    # Tag push only: skipped on dry runs, so a dry run publishes nothing.
+    # `environment: release` should get a required reviewer in repo settings
+    # (CI-CD.md §6.4) — that config is manual, GitHub-side.
+    needs: [preflight, package, attest, sbom]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # only job that elevates (CI-CD.md §6.4)
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: sbom
+          path: dist
+      - name: Create draft release with notes from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          # Keep a Changelog allows both `## [0.1.0]` and the dated form
+          # `## [0.1.0] - 2026-10-20`; preflight accepts either, so the
+          # extraction must too. Match the exact heading or a ` - ` suffix
+          # only — never `## [0.1.0]-rc1`.
+          awk -v tag="$tag" '
+            $0 == "## [" tag "]" || index($0, "## [" tag "] - ") == 1 { found=1; next }
+            /^## / { found=0 }
+            found
+          ' CHANGELOG.md > notes.md
+          test -s notes.md # preflight verified the section exists; be safe
+          # Same two shapes preflight accepts, checked against the source.
+          grep -qE "^## \[${tag}\]( - [0-9]{4}-[0-9]{2}-[0-9]{2})?$" CHANGELOG.md
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            dist/*
+          # M7: the optional `aur` job (CI-CD.md §6.2) regenerates the
+          # sweep-bin checksums and opens a PR; it is intentionally not
+          # scaffolded at M1.5.

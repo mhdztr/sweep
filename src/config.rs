@@ -172,7 +172,7 @@ fn parse_message(text: &str, err: &toml::de::Error) -> String {
 /// behavior is unchanged: exactly `dirs::config_dir()`.
 ///
 /// `home` is the value `env::resolve_home()` produced (so `SWEEP_HOME` and
-/// `Ctx::home` agree); the sandbox probe is isolated in [`default_path_in`]
+/// `Ctx::home` agree); the sandbox probe is isolated in `default_path_in`
 /// so it is unit-testable without mutating process env (M1 bans that).
 pub fn default_path(home: &Path) -> Option<PathBuf> {
     default_path_in(home, std::env::var_os("SWEEP_HOME"))

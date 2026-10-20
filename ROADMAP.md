@@ -73,35 +73,39 @@ repeatable release path — **without changing `sweep` behavior**.
 **Depends on:** M1. **Detail:** `docs/CI-CD.md` (plan of record).
 
 Tasks:
-- [ ] Restructure `ci.yml`: split jobs (fmt / clippy / test / doctest / docs /
+- [x] Restructure `ci.yml`: split jobs (fmt / clippy / test / doctest / docs /
       release-build), `--locked` on every dependency-resolving command,
       concurrency, timeouts, least-privilege permissions; remove the redundant
       "Docs sync" step (the real catalog gate lands at M3).
-- [ ] `deny.toml` + `security.yml`: `cargo-deny` (advisories, licenses, bans,
+- [x] `deny.toml` + `security.yml`: `cargo-deny` (advisories, licenses, bans,
       sources), `cargo-machete` (milestone-commented ignores), `actionlint`,
       `typos`; PR `dependency-review`.
-- [ ] `scheduled.yml`: weekly CodeQL (Rust), OpenSSF Scorecard, and a
+- [x] `scheduled.yml`: weekly CodeQL (Rust), OpenSSF Scorecard, and a
       beta-toolchain build (non-blocking); advisories run weekly in
       `security.yml`.
-- [ ] Dependabot (cargo + actions, grouped, weekly).
+- [x] Dependabot (cargo + actions, grouped, weekly).
 - [ ] Repo settings: secret scanning + push protection, private vulnerability
       reporting, branch protection (required: fmt, clippy, test, doctest, docs,
-      release-build, deny), `v*` tag protection.
-- [ ] `SECURITY.md`, `CHANGELOG.md`; `Cargo.toml` metadata (`repository`,
+      release-build, deny), `v*` tag protection. (Maintainer, GitHub-side.)
+- [x] `SECURITY.md`, `CHANGELOG.md`; `Cargo.toml` metadata (`repository`,
       `homepage`, `rust-version` discovered with `cargo msrv`).
-- [ ] `release.yml` scaffold: tag `v*` + `workflow_dispatch` dry run; build
+- [x] `release.yml` scaffold: tag `v*` + `workflow_dispatch` dry run; build
       matrix (x86_64 gnu + static musl, aarch64 gnu); archives, `.sha256`, SBOM,
       SLSA provenance — publishes nothing without a tag.
-- [ ] `packaging/` layout + `packaging.yml` skeleton (actionlint + shellcheck;
-      the PKGBUILD job is skipped until M7 files exist — nothing to validate
+- [x] `packaging/` layout + `packaging.yml` skeleton (actionlint lives in
+      `security.yml` per CI-CD.md §5 decision G; shellcheck here; the PKGBUILD
+      job is skipped until M7 files exist — nothing to validate
       before release artifacts do).
 - [x] Point `AGENTS.md`, `CONTEXT.md`, `docs/MASTER-PLAN.md`, and
       `docs/ARCHITECTURE.md` at `docs/CI-CD.md`.
 
 **Acceptance gate:**
-- [ ] New workflows pass on a PR; `actionlint` clean.
-- [ ] `cargo deny check` green with a reviewed allowlist (every ignore dated and
-      justified); `cargo machete` green with milestone comments.
+- [ ] New workflows pass on a PR; `actionlint` clean. (actionlint is locally
+      clean; the PR run is pending — maintainer.)
+- [x] `cargo deny check` green with a reviewed allowlist (every ignore dated and
+      justified); `cargo machete` green with milestone comments. (Both verified
+      locally 2026-10-20; two dated `unmaintained` ignores documented in
+      `deny.toml`.)
 - [ ] `cargo test --doc` and `cargo build --release --locked` run in CI.
 - [ ] `release.yml` dry run produces archives + checksums + SBOM + attestation
       and publishes nothing.
@@ -242,7 +246,7 @@ Tasks:
 - [ ] `release.yml` final: tag → x86_64 gnu + static musl (+ aarch64 gnu),
       `cargo auditable`, SBOM (CycloneDX), SLSA provenance, `.sha256`, draft
       release with notes from `CHANGELOG.md` (`docs/CI-CD.md` §6).
-- [ ] Verify release artifacts: `sha256sum -c`, `gh attestation verify`,
+- [ ] Verify release artifacts: `sha256sum -c checksums.sha256`, `gh attestation verify`,
       `cargo audit bin` on the shipped binaries.
 - [ ] README final: install (AUR/manual), quickstart, presets, safety section
       (link SAFETY.md), rule table (generated), FAQ (Downloads? timer? sudo? trash?)
@@ -259,7 +263,7 @@ scope). Do not add Flatpak packaging or CI.
   end-to-end without config → frees space → history entry exists → `man sweep`
   renders → completions tab-work → timer enable → journal report appears.
 - Source package `sweep` builds and tests in a clean chroot.
-- Release artifacts verify on a clean machine: `sha256sum -c`,
+- Release artifacts verify on a clean machine: `sha256sum -c checksums.sha256`,
   `gh attestation verify`, `cargo audit bin`.
 - All golden snapshots match docs; exit codes exercised in CI.
 

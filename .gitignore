@@ -5,5 +5,10 @@
 *.swp
 .direnv/
 
+# Generated artifacts (release.yml produces these in CI; never commit)
+/dist/
+*.cdx.json
+*.cdx.xml
+
 # Test artifacts
 /tests/fixtures/**/__tmp__

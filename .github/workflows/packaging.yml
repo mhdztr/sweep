@@ -1,0 +1,59 @@
+name: packaging
+
+# AUR/PKGBUILD validation (docs/CI-CD.md §7.1). The PKGBUILDs land at M7, so
+# both jobs are skeletons until then: the shellcheck job skips cleanly, the
+# validate job never runs. Workflow-hygiene linting (actionlint) lives in
+# security.yml, not here (decision G, CI-CD.md §5).
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/packaging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: packaging-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck-pkgbuild:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck PKGBUILDs (clean skip until M7 files exist)
+        run: |
+          mapfile -t pkgbuilds < <(find packaging -name PKGBUILD -type f 2>/dev/null || true)
+          if [ "${#pkgbuilds[@]}" -eq 0 ]; then
+            echo "no PKGBUILDs yet (M7) - skipping shellcheck"
+            exit 0
+          fi
+          shellcheck -s bash "${pkgbuilds[@]}"
+
+  pkgbuild-validate:
+    # M1.5 placeholder: gated on a repo variable that does not exist yet, so
+    # the job never runs (nothing to validate before release artifacts
+    # exist). At M7: set the `ENABLE_PKGBUILD_VALIDATE` repo variable (or
+    # replace the condition) and implement the steps below; the `exit 1` is
+    # a tripwire so enabling the gate alone fails loudly.
+    #
+    # M7 plan (docs/CI-CD.md §7.1):
+    #   - container: archlinux:base-devel
+    #   - run makepkg as a non-root user
+    #   - check() honors `cargo test --release --locked` (never --frozen)
+    #   - diff `makepkg --printsrcinfo` against the committed .SRCINFO
+    if: ${{ vars.ENABLE_PKGBUILD_VALIDATE == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate PKGBUILDs (M7)
+        run: |
+          echo "pkgbuild-validate is a placeholder; implement per docs/CI-CD.md §7.1"
+          exit 1

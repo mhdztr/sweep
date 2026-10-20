@@ -1,10 +1,17 @@
 # sweep — CI/CD, security, and distribution
 
-> **STATUS: PLANNED — NOT IMPLEMENTED.** The only workflow that exists today is
-> `.github/workflows/ci.yml` (one job: fmt + clippy + test). Everything else in
-> this document is the spec of record for **ROADMAP M1.5** (foundation) and
-> **M7** (release + AUR). Unchecked tasks live in `ROADMAP.md`; this file holds
-> the detail so a future session does not have to re-derive it.
+> **STATUS: foundation IMPLEMENTED (M1.5, 2026-10-20) — release/AUR parts
+> PLANNED.** All five workflows exist: `ci.yml` (fmt / clippy / test /
+> doctest / docs / release-build / msrv), `security.yml` (deny, machete,
+> actionlint, typos, dependency-review), `scheduled.yml` (CodeQL, Scorecard,
+> beta), `release.yml` (tag-gated scaffold with dry run), and
+> `packaging.yml` (skeleton until M7). `deny.toml`, `SECURITY.md`,
+> `CHANGELOG.md`, and `.github/dependabot.yml` are in place. Still planned
+> for **M7**: PKGBUILDs + `.SRCINFO`, the optional `aur` job, and the first
+> real tag. GitHub-side settings (branch/tag protection, secret scanning,
+> `release` environment reviewer) are maintainer steps — see §8 and
+> `ROADMAP.md`. Unchecked tasks live in `ROADMAP.md`; this file holds the
+> detail so a future session does not have to re-derive it.
 >
 > **Scope note:** the `flatpak-unused` *cleanup rule* (`docs/RULES-CATALOG.md`
 > §16) is unrelated to *Flatpak packaging*. The rule stays. Flatpak packaging is
@@ -144,6 +151,14 @@ Rules:
 CodeQL and Scorecard run from `scheduled.yml`, not `security.yml`; this table is
 the security surface, not a single workflow.
 
+**Implementation note (M1.5, actionlint placement):** `actionlint` runs in
+`security.yml` (workflow hygiene is a supply-chain concern), **not** in
+`packaging.yml`; the latter contains only PKGBUILD shellcheck + the M7
+validation placeholder. This resolves the ambiguous ROADMAP parenthetical.
+`zizmor` remains optional and was skipped at M1.5. The `dependency-review`
+action has no floating `v4`/`v5` major tag upstream, so it is pinned to its
+full (GitHub-owned) `v5.0.0` tag.
+
 ### 5.1 `deny.toml` policy
 
 - `[advisories]`: RustSec DB; `yanked = "deny"`; unmaintained entries may be
@@ -159,20 +174,34 @@ the security surface, not a single workflow.
 - No `[advisories] ignore` entries without a comment naming the crate, the
   advisory, why it does not apply, and the date.
 
+**Implementation note (M1.5):** the first real run surfaced two `unmaintained`
+advisories — `fxhash` (RUSTSEC-2025-0057, via `inquire`) and `number_prefix`
+(RUSTSEC-2025-0119, via `indicatif`). Both are ignored in `deny.toml` with
+dated justifications and follow-up hooks (M2 re-evaluates both dependency
+chains); neither is a vulnerability advisory. The `[bans]` duplicate warning
+is the expected `unicode-width` pair (0.1.x via indicatif, 0.2.x direct).
+The config uses cargo-deny 0.20's version-2 format, which has no `version =`
+key.
+
 ### 5.2 Unused dependencies
 
 `cargo-machete` will flag crates that are declared but not yet used. Expected
-planned-but-unused entries at M1.5:
+planned-but-unused entries at M1.5 (implemented):
 
 | Crate | Used at | Handling |
 |---|---|---|
 | `inquire` | M2 (checklist) | ignore, comment "M2" |
-| `comfy-table` | possibly never (hand-rolled renderer won) | decide at M2: remove or ignore |
-| `clap_complete` | M7 (completions) | ignore, comment "M7" |
+| `comfy-table` | possibly never (hand-rolled renderer won) | ignored pending M2: decide remove vs keep |
 | `clap_mangen` | M7 (man page) | ignore, comment "M7" |
+| `clap_complete` | **used since M1** (`sweep completion <shell>`, `src/cli/mod.rs`) | **not** flagged, no ignore needed — the earlier draft of this table was stale |
 
 The ignore list must shrink as milestones land. Any ignore without a milestone
 comment is itself a review failure.
+
+**Implementation note (M1.5):** machete ignores live in Cargo.toml under
+`[package.metadata.cargo-machete]` (the section key is `cargo-machete` in
+machete 0.9.2, not `machete`); `deny.toml` cannot hold them. This table stays
+the human-readable source of truth.
 
 ### 5.3 Scheduled runs
 
@@ -218,7 +247,7 @@ tag/version preflight checks are skipped; only the build and attest steps run.
 |---|---|
 | `preflight` | Tag equals `Cargo.toml` version; `CHANGELOG.md` has a section for it; `Cargo.lock` committed; tag is on `main`; no dirty generated files. |
 | `build` | Matrix below; `cargo auditable build --release --locked` so shipped binaries carry dependency metadata. |
-| `package` | `sweep-v<ver>-<target>.tar.gz` containing `sweep`, `LICENSE`, `README.md`, `CHANGELOG.md`; sibling `.sha256`. Also a `sweep-v<ver>-src.tar.gz` (source + `Cargo.lock`, `LICENSE`, README, CHANGELOG) for the source AUR package. M7 adds man page, completions, systemd units. |
+| `package` | `sweep-v<ver>-<target>.tar.gz` containing `sweep`, `LICENSE`, `README.md`, `CHANGELOG.md`; sibling `.sha256` per archive plus one aggregate `checksums.sha256`. Also a `sweep-v<ver>-src.tar.gz` (source + `Cargo.lock`, `LICENSE`, README, CHANGELOG) for the source AUR package. M7 adds man page, completions, systemd units. |
 | `sbom` | `cargo-cyclonedx` → `sweep-v<ver>.cdx.json`, attached to the release. |
 | `attest` | `actions/attest-build-provenance` for every archive (SLSA); `gh attestation verify` must succeed. |
 | `publish` | `gh release create --draft` with notes from `CHANGELOG.md`; attach everything; manual publish. |
@@ -227,7 +256,8 @@ tag/version preflight checks are skipped; only the build and attest steps run.
 
 Source tarball creation: `git archive --prefix=sweep-v<ver>/ -o
 sweep-v<ver>-src.tar.gz HEAD`. It must include the tracked `Cargo.lock` and
-`LICENSE`; every archive (source included) gets a sibling `.sha256`.
+`LICENSE`; every archive (source included) gets a sibling `.sha256`, and the
+job also writes one aggregate `checksums.sha256` covering all archives.
 
 ### 6.3 Build matrix
 
@@ -254,7 +284,8 @@ sweep-v<ver>-src.tar.gz HEAD`. It must include the tracked `Cargo.lock` and
 2. Commit, push, wait for `ci.yml` + `security.yml` green.
 3. `git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0`.
 4. Watch `release.yml`: preflight, matrix, checksums, SBOM, attestation.
-5. Verify locally: `sha256sum -c`, `gh attestation verify`, `cargo audit bin`.
+5. Verify locally: `sha256sum -c checksums.sha256`, `gh attestation verify`,
+   `cargo audit bin`.
 6. Publish the draft release.
 7. Update AUR `sweep-bin` (checksum + `pkgver`), then `sweep` (the source
    tarball changes every release); build both in a clean chroot before pushing.
@@ -308,10 +339,10 @@ never run on forks.
   completions, and units join at M7. Binary archives extract to
   `sweep-v<ver>-<target>/`; the source tarball extracts to `sweep-v<ver>/`.
 - Every archive gets a `.sha256` and a build-provenance attestation.
-- `cargo auditable` metadata must survive stripping. The current release
-  profile sets `strip = true`, which can drop the audit section; use
-  `strip = "debuginfo"` (or strip only debug info after the auditable build)
-  and verify with `cargo audit bin` in the release job.
+- `cargo auditable` metadata must survive stripping. ~~The current release
+  profile sets `strip = true`~~ — **M1.5 changed it to `strip = "debuginfo"`**
+  so the audit section survives; the release job's `audit-bin` step
+  (`cargo audit bin` on the musl binary) proves it on every tag.
 
 ### 7.3 Flatpak — DEFERRED (decision D11)
 
@@ -415,6 +446,14 @@ rust-version = "<discover with cargo msrv>"   # edition 2024 floor is 1.85
 `rust-version` must be discovered, not guessed: the dependency graph decides the
 real floor. The `msrv` CI job then pins it.
 
+**Implementation note (M1.5):** `rust-version = "1.88"` was discovered by
+toolchain bisection (`cargo +<N> build --locked`): 1.85 (the edition-2024
+floor) and 1.86/1.87 fail on `comfy-table` (let chains, stabilized in 1.88);
+1.88 is the first green build. `cargo msrv find` itself could not run on the
+discovery host (its dist-index download was blocked there), hence the
+documented fallback. The `msrv` job in `ci.yml` pins `1.88.0` and is
+deliberately **not** a required check (§8).
+
 ---
 
 ## 11. Verification (definition of done)
@@ -422,12 +461,16 @@ real floor. The `msrv` CI job then pins it.
 **M1.5 (foundation):**
 
 - [ ] New workflows pass on a PR (not a direct push).
-- [ ] `actionlint` clean on every workflow file.
-- [ ] `cargo deny check` green with a reviewed allowlist; every ignore has a
-      crate, advisory, reason, and date.
-- [ ] `cargo machete` green with milestone-commented ignores.
-- [ ] `cargo test --doc` runs in CI and passes.
-- [ ] `cargo build --release --locked` runs in CI.
+- [x] `actionlint` clean on every workflow file. (Locally verified on
+      2026-10-20; the CI job re-verifies on every PR.)
+- [x] `cargo deny check` green with a reviewed allowlist; every ignore has a
+      crate, advisory, reason, and date. (The two `unmaintained` ignores are
+      documented in `deny.toml` and §5.1.)
+- [x] `cargo machete` green with milestone-commented ignores.
+- [ ] `cargo test --doc` runs in CI and passes. (Passes locally; CI
+      verification pending the first PR.)
+- [ ] `cargo build --release --locked` runs in CI. (Passes locally; CI
+      verification pending the first PR.)
 - [ ] `release.yml` dry run produces archives, `.sha256`, SBOM, and an
       attestation, and publishes nothing.
 - [ ] `packaging.yml` dispatch run is green and skips cleanly when no PKGBUILDs
@@ -439,7 +482,8 @@ real floor. The `msrv` CI job then pins it.
 
 - [ ] Tag `v0.1.0` produces a draft release with target archives, a source
       tarball, `.sha256` files, and an SBOM.
-- [ ] `sha256sum -c` and `gh attestation verify` succeed on a clean machine.
+- [ ] `sha256sum -c checksums.sha256` and `gh attestation verify` succeed on a
+      clean machine.
 - [ ] `cargo audit bin` reports no advisories for the shipped binaries.
 - [ ] `packaging/aur/sweep-bin` and `packaging/aur/sweep` build in
       `archlinux:base-devel` as a non-root user; `namcap` clean; `.SRCINFO`

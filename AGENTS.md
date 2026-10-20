@@ -22,8 +22,10 @@ cargo run -- scan              # read-only scan
 cargo test --test cli_smoke    # CLI surface tests only
 ```
 
-Release: `cargo build --release` (lto=thin, strip=true in profile). The
-tag-driven release + AUR pipelines are planned in `docs/CI-CD.md` (M1.5/M7).
+Release: `cargo build --release` (lto=thin, strip="debuginfo" in profile —
+the latter keeps `cargo auditable` metadata intact). The tag-driven release +
+AUR pipelines are specified in `docs/CI-CD.md` (scaffolded in M1.5, first tag
+at M7).
 
 ## Repo layout
 
@@ -54,7 +56,9 @@ tag-driven release + AUR pipelines are planned in `docs/CI-CD.md` (M1.5/M7).
 
 A change to a rule or CLI behavior **must** update `docs/RULES-CATALOG.md` /
 `docs/CLI-UX.md` in the same commit; a workflow or packaging change **must**
-update `docs/CI-CD.md`. `sweep rules list` output is snapshot-tested against the
+update `docs/CI-CD.md`. The maintainer commits manually; agents end their
+session with a suggested conventional commit message (`docs:`/`chore:`/`ci:`)
+instead of committing. `sweep rules list` output is snapshot-tested against the
 catalog. Golden snapshots (`insta`) are re-recorded deliberately
 (`cargo insta review`), never blindly accepted. UI output must contain no emoji
 (decision D13); the existing M1 tier glyphs are replaced by ASCII `+ ! #` in M2.
