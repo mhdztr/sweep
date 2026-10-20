@@ -208,10 +208,10 @@ fn tier_color(tier: Tier) -> (u8, u8, u8) {
     }
 }
 
-fn tier_cell(r: &RuleResult, theme: &Theme) -> Cell {
+fn tier_cell(r: &RuleResult) -> Cell {
     Cell::left(vec![Seg::color(
         tier_color(r.tier),
-        format!("{} {}", r.tier.glyph(theme.unicode), r.tier.label()),
+        format!("{} {}", r.tier.glyph(), r.tier.label()),
     )])
 }
 
@@ -297,13 +297,7 @@ pub fn render_scan_table(
 fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     let tier_cells: Vec<usize> = results
         .iter()
-        .map(|r| {
-            display_width(&format!(
-                "{} {}",
-                r.tier.glyph(theme.unicode),
-                r.tier.label()
-            ))
-        })
+        .map(|r| display_width(&format!("{} {}", r.tier.glyph(), r.tier.label())))
         .collect();
     let cat_cells: Vec<usize> = results
         .iter()
@@ -405,7 +399,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
         }
         out.push_str(&render_line(
             &[
-                tier_cell(r, theme),
+                tier_cell(r),
                 Cell::left(segs),
                 Cell::left(vec![Seg::dim(truncate(
                     &r.location,
@@ -428,13 +422,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
 fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     let tier_w = results
         .iter()
-        .map(|r| {
-            display_width(&format!(
-                "{} {}",
-                r.tier.glyph(theme.unicode),
-                r.tier.label()
-            ))
-        })
+        .map(|r| display_width(&format!("{} {}", r.tier.glyph(), r.tier.label())))
         .chain([display_width("tier")])
         .max()
         .unwrap_or(0)
@@ -478,7 +466,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
         // Location + notes dropped (visible via `-v`).
         out.push_str(&render_line(
             &[
-                tier_cell(r, theme),
+                tier_cell(r),
                 Cell::left(vec![Seg::plain(truncate(
                     r.category,
                     widths[1].saturating_sub(2),
@@ -498,7 +486,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
 
 fn render_compact(results: &[RuleResult], width: usize, theme: &Theme, out: &mut String) {
     for r in results {
-        let tier = format!("{} {}", r.tier.glyph(theme.unicode), r.tier.label());
+        let tier = format!("{} {}", r.tier.glyph(), r.tier.label());
         // "  {tier}  {category}" — category shrinks to fit, location/notes
         // dropped (visible via `-v`).
         let room = width.saturating_sub(4 + display_width(&tier) + 2);
@@ -560,11 +548,14 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn display_width_strips_ansi_and_counts_emoji() {
-        assert_eq!(display_width("\u{1b}[32m🟩 safe\u{1b}[0m"), 7);
+    fn display_width_strips_ansi_and_counts_unicode() {
+        assert_eq!(display_width("\u{1b}[32m+ safe\u{1b}[0m"), 6);
         assert_eq!(display_width("plain"), 5);
         assert_eq!(display_width(""), 0);
-        assert_eq!(display_width("🟩"), 2);
+        // unicode-width still earns its keep: box-drawing (1 col) and wide
+        // CJK user data (2 cols) are counted correctly.
+        assert_eq!(display_width("│"), 1);
+        assert_eq!(display_width("漢"), 2);
     }
 
     #[test]
@@ -572,8 +563,9 @@ mod tests {
         assert_eq!(truncate("hello", 10, true), "hello");
         assert_eq!(truncate("hello world", 8, true), "hello w…");
         assert_eq!(truncate("hello world", 8, false), "hello...");
-        assert_eq!(truncate("🟩🟨🟥", 5, true), "🟩🟨…");
-        assert_eq!(truncate("🟩🟨🟥", 4, true), "🟩…");
+        // Wide (2-col) chars prove column-aware truncation.
+        assert_eq!(truncate("漢字漢", 5, true), "漢字…");
+        assert_eq!(truncate("漢字漢", 4, true), "漢…");
     }
 
     fn result(applied: bool) -> RuleResult {
@@ -617,9 +609,9 @@ mod tests {
         );
         let lines: Vec<&str> = s.lines().collect();
         assert_eq!(lines.len(), 4, "compact = 2 lines per row:\n{s}");
-        assert_eq!(lines[0], "  🟩 safe  tmp & var-tmp");
+        assert_eq!(lines[0], "  + safe  tmp & var-tmp");
         assert_eq!(lines[1], "    3.2 KiB · 2 files");
-        assert_eq!(lines[2], "  🟩 safe  tmp & var-tmp");
+        assert_eq!(lines[2], "  + safe  tmp & var-tmp");
         assert_eq!(lines[3], "    — · — files");
     }
 

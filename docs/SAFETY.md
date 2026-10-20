@@ -5,9 +5,6 @@ and the tier of what's about to go — and every destructive path is abortable.*
 
 This document is normative: if code contradicts it, code is wrong.
 
-> **Glyph note (D13):** tables/examples below show the M1 emoji shorthand.
-> Rendered output is ASCII only from M2 (`+`/`!`/`#`/`~`; `lock`/`sudo`/`warn`).
-
 ---
 
 ## 1. Threat model — what we defend against
@@ -36,10 +33,10 @@ kernel/filesystem bugs.
 
 | Tier | Visible when | Default selection | Confirmations | Bypass |
 |---|---|---|---|---|
-| 🟩 safe | always (if detect=ready) | **checked** in `safe`+`regular` | **P1** shared summary (default N) | `--yes` |
-| 🟨 caution | always | **unchecked** | **P1** + **P2** per rule (list-first where data-bearing) | `--yes` |
-| 🟥 destructive | only under `full` preset | **locked → unlocked-but-unchecked** under full | **P1** + **P3 typed PURGE per category** | only `--i-know-what-im-doing` |
-| 📋 report-only | when applicable | n/a | never selectable | n/a |
+| `+` safe | always (if detect=ready) | **checked** in `safe`+`regular` | **P1** shared summary (default N) | `--yes` |
+| `!` caution | always | **unchecked** | **P1** + **P2** per rule (list-first where data-bearing) | `--yes` |
+| `#` destructive | only under `full` preset | **locked → unlocked-but-unchecked** under full | **P1** + **P3 typed PURGE per category** | only `--i-know-what-im-doing` |
+| `~` report-only | when applicable | n/a | never selectable | n/a |
 | guarded rows | always | unchecked | P6 if user overrides | n/a |
 
 **Phase invariants:**

@@ -61,7 +61,7 @@ design instead of being special-cased. Full specs: `RULES-CATALOG.md`.
   **typed `PURGE`** after a summary screen. `--yes` does not bypass (D7).
 - `~` **report-only** — snapper snapshots: measured and reported, never touched (D9).
 
-All TUI glyphs are ASCII (D13, landing in M2); no emoji anywhere in rendered
+All TUI glyphs are ASCII (D13); no emoji anywhere in rendered
 output.
 
 ### 4.3 Presets

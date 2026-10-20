@@ -307,7 +307,7 @@ walk(root):
 - **Width handling:** `terminal_size()`; ≥100 cols → full table; 60–99 → drop
   `files` column + shorten paths with `~/…/tail`; <60 → compact list rows
   (two-line per rule). `--no-unicode` swaps box drawing to ASCII; tier and state
-  glyphs are ASCII in every mode (D13, landing in M2).
+  glyphs are ASCII in every mode (D13).
 - **Checklist:** `inquire::MultiSelect` with custom renderer; prompt text = header
   box; render loop re-renders live totals on every toggle. Keys: `space` toggle,
   `↑/↓` (also `Ctrl-P/N`), `a` all safe, `n` none, `i` invert, `p` preset cycle,

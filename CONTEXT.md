@@ -89,9 +89,8 @@ publishing from `main` without tags.
 portability.
 *Decision:* tier glyphs are ASCII `+ ! #` in every mode; no emoji anywhere in
 TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII.
-*Consequences:* width math + the five golden snapshots change; the UI specs'
-examples keep the M1 glyphs until M2 updates them in the same commit as the
-code; lands as the first M2 task (ROADMAP).
+*Consequences:* width math + the golden snapshots changed; the UI specs'
+examples were updated to ASCII in the same commit as the code (M2, first task).
 
 ## 3. Conventions
 
@@ -186,6 +185,7 @@ acceptance gate; verify checksums + provenance before publishing; update AUR
 | 2026-10-19 | R3 | M0 built: repo scaffolded at `~/Projects/sweep` (edition 2024, clap surface complete, `SWEEP_TEST_GUARD` sandbox harness, 14 tests green); docs copied/adapted; history-record schema restored into `docs/ARCHITECTURE.md` §11 |
 | 2026-10-19 | R4 | M1 scan engine: jwalk 0.8 walker pruning subtrees via process_read_dir children.retain (verified from source); scan is lock-free — flock scope = mutating commands only (ARCHITECTURE §4, SAFETY §10); hand-rolled ANSI/emoji-aware table renderer (+unicode-width 0.2) instead of comfy-table presets; "newest" = newest counted entry (age-gated files excluded from every count) |
 | 2026-10-19 | R5 | Repo hardening + distribution planned (`docs/CI-CD.md`): five-workflow CI/CD design; `cargo-deny` as the vulnerability gate; tag-gated release with SBOM + SLSA provenance; AUR `sweep-bin` then source `sweep`; Flatpak deferred (D11); no-emoji UI rule (D13). ROADMAP gains M1.5 (infra, before M2) and expanded M7 release tasks |
+| 2026-10-20 | R8 | M2 task 1 (D13 executed): M1 emoji tier glyphs replaced with ASCII `+ ! #` — `Tier::glyph()` lost its `unicode` param, 4 call sites in `src/ui/table.rs` updated, 4 non-ASCII goldens re-recorded, and CLI-UX/RULES-CATALOG/SAFETY examples converted with their D13 banners removed. `unicode-width` retained (ANSI strip + wide user data); no behavior change. |
 | 2026-10-20 | R7 | Dependabot's first cargo group PR (7 bumps) diagnosed: jwalk 0.9 is unmaintained and its API break (removed `read_children_error`) broke `src/scan/walker.rs`; pin held at 0.8.x and `jwalk >=0.9.0` added to Dependabot's ignore list. The same bump retired both advisory ignores: indicatif 0.18 dropped `number_prefix`, inquire 0.9 dropped `fxhash` — `deny.toml` `[advisories] ignore` is now empty. Other six bumps (comfy-table 8, dirs 7, indicatif 0.18, inquire 0.9, toml 1.1, clap_mangen 0.3) verified green across all checks including MSRV 1.88 |
 | 2026-10-20 | R6 | M1.5 infra landed: five workflows (ci/security/scheduled/release/packaging), `deny.toml` (two dated `unmaintained` ignores: fxhash via inquire, number_prefix via indicatif), `SECURITY.md`, `CHANGELOG.md`, Dependabot; Cargo metadata `rust-version = "1.88"` (discovered by bisection — comfy-table let-chains floor, above the 1.85 edition-2024 floor); release profile `strip = "debuginfo"` for `cargo auditable` survival; machete ignores in `[package.metadata.cargo-machete]`; actionlint placed in `security.yml` (resolves the ROADMAP parenthetical). No `sweep` behavior change (only a `src/config.rs` doc-comment link fix for the `docs` gate) |
 

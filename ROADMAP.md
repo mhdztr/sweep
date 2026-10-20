@@ -118,10 +118,10 @@ Tasks:
 **Depends on:** M1.5.
 
 Tasks:
-- [ ] UI glyph cleanup: no emoji in any output — tier glyphs are ASCII
+- [x] UI glyph cleanup: no emoji in any output — tier glyphs are ASCII
       `+ ! #` unconditionally; width math + golden snapshots updated; README
       tier bullets plus CLI-UX/RULES-CATALOG/SAFETY examples updated in the
-      same commit (decision D13).
+      same commit (decision D13). Done in R8.
 - [ ] `ui/checklist.rs`: inquire MultiSelect + custom renderer, keybindings
       (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled)
 - [ ] Presets: safe/regular/full selection logic (full still gates destructive at M4 —

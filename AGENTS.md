@@ -60,8 +60,8 @@ update `docs/CI-CD.md`. The maintainer commits manually; agents end their
 session with a suggested conventional commit message (`docs:`/`chore:`/`ci:`)
 instead of committing. `sweep rules list` output is snapshot-tested against the
 catalog. Golden snapshots (`insta`) are re-recorded deliberately
-(`cargo insta review`), never blindly accepted. UI output must contain no emoji
-(decision D13); the existing M1 tier glyphs are replaced by ASCII `+ ! #` in M2.
+(`cargo insta review`), never blindly accepted. UI output contains no emoji;
+tier glyphs are ASCII `+ ! #` (decision D13).
 
 ## Current milestone
 

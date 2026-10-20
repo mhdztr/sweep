@@ -8,9 +8,6 @@ update here are bugs.
 (visible, unchecked) · `#` `destructive` (`full` preset only, typed `PURGE`) · `~`
 report-only (no clean action ever).
 
-> **Glyph note (D13):** tables below still use the M1 emoji shorthand for tier and
-> sudo markers. Rendered output is ASCII only from M2, as above.
-
 **Field meanings:**
 - **Targets** — exact paths/globs (Arch; `detect()` substitutes elsewhere).
 - **Action** — what execution does (built-in walker delete or external argv).
@@ -23,42 +20,42 @@ report-only (no clean action ever).
 
 ## Summary tables
 
-| # | id | tier | sudo | default in `regular` |
-|---|---|---|---|---|
-| 1 | `tmp` | 🟩 | – | ✔ checked |
-| 2 | `user-cache` | 🟩 | – | ✔ |
-| 3 | `thumbnails` | 🟩 | – | ✔ |
-| 4 | `trash` | 🟩 | – | ✔ |
-| 5 | `journal-user` | 🟩 | – | ✔ |
-| 6 | `browser-cache` | 🟩 | – | ✔ (guard-held if app running) |
-| 7 | `editor-cache` | 🟩 | – | ✔ (guard-held if app running) |
-| 8 | `tool-caches` | 🟩 | – | ✔ |
-| 9 | `app-caches` | 🟩 | – | ✔ |
-| 10 | `log-rotate` | 🟩 | – | ✔ |
-| 11 | `xdg-state-junk` | 🟩 | – | ✔ |
-| 12 | `pacman-cache` | 🟨 | 🔓 | ✗ |
-| 13 | `journal-system` | 🟨 | 🔓 | ✗ |
-| 14 | `aur-builds` | 🟨 | – | ✗ |
-| 15 | `orphans` | 🟨 | 🔓 | ✗ |
-| 16 | `flatpak-unused` | 🟨 | – | ✗ |
-| 17 | `docker` | 🟨 | 🔓* | ✗ |
-| 18 | `podman` | 🟨 | – | ✗ |
-| 19 | `dev-artifacts` | 🟨 | – | ✗ |
-| 20 | `steam-shader` | 🟨 | – | ✗ |
-| 21 | `snapshots-report` | 📋 | – | n/a (always listed) |
-| 22 | `downloads` | 🟥 | – | locked (needs `full`) |
-| 23 | `cache-deep` | 🟥 | – | locked |
-| 24 | `tmp-full` | 🟥 | – | locked |
-| 25 | `pkgcache-zero` | 🟥 | 🔓 | locked |
-| 26 | `purge-logs` | 🟥 | 🔓 | locked |
+| #  | id                 | tier | sudo  | default in `regular`            |
+|----|--------------------|------|-------|---------------------------------|
+| 1  | `tmp`              | +    | –     | [x] checked                     |
+| 2  | `user-cache`       | +    | –     | [x]                             |
+| 3  | `thumbnails`       | +    | –     | [x]                             |
+| 4  | `trash`            | +    | –     | [x]                             |
+| 5  | `journal-user`     | +    | –     | [x]                             |
+| 6  | `browser-cache`    | +    | –     | [x] (guard-held if app running) |
+| 7  | `editor-cache`     | +    | –     | [x] (guard-held if app running) |
+| 8  | `tool-caches`      | +    | –     | [x]                             |
+| 9  | `app-caches`       | +    | –     | [x]                             |
+| 10 | `log-rotate`       | +    | –     | [x]                             |
+| 11 | `xdg-state-junk`   | +    | –     | [x]                             |
+| 12 | `pacman-cache`     | !    | sudo  | [ ]                             |
+| 13 | `journal-system`   | !    | sudo  | [ ]                             |
+| 14 | `aur-builds`       | !    | –     | [ ]                             |
+| 15 | `orphans`          | !    | sudo  | [ ]                             |
+| 16 | `flatpak-unused`   | !    | –     | [ ]                             |
+| 17 | `docker`           | !    | sudo* | [ ]                             |
+| 18 | `podman`           | !    | –     | [ ]                             |
+| 19 | `dev-artifacts`    | !    | –     | [ ]                             |
+| 20 | `steam-shader`     | !    | –     | [ ]                             |
+| 21 | `snapshots-report` | ~    | –     | n/a (always listed)             |
+| 22 | `downloads`        | #    | –     | locked (needs `full`)           |
+| 23 | `cache-deep`       | #    | –     | locked                          |
+| 24 | `tmp-full`         | #    | –     | locked                          |
+| 25 | `pkgcache-zero`    | #    | sudo  | locked                          |
+| 26 | `purge-logs`       | #    | sudo  | locked                          |
 
 \* only when the docker socket requires root; normally group-based, unprivileged.
 
 ---
 
-# 🟩 Safe rules
+# Tier `+` — safe rules
 
-## 1. `tmp` — Temp files 🟩
+## 1. `tmp` — Temp files — `+` safe
 - **Targets:** `/tmp/*`, `/var/tmp/*`.
 - **Protections (shared with `tmp-full`, single source `rules::tmp::PROTECTED`):**
   subdirs matching `systemd-private-*`, `snap.mount*`, `dbus-*` *sockets*;
@@ -74,7 +71,7 @@ report-only (no clean action ever).
 - **Tests:** protected entries survive (seed socket + `systemd-private-x` dir); age
   gate counts exact; symlink into `~/` not followed; open-fd file skipped.
 
-## 2. `user-cache` — User caches 🟩
+## 2. `user-cache` — User caches — `+` safe
 - **Targets:** `~/.cache/*` top-level entries, **minus** whitelist `keep` and minus
   entries owned by destructive `cache-deep` handling (same root; `user-cache` skips
   whitelisted, `cache-deep` ignores whitelist).
@@ -86,21 +83,21 @@ report-only (no clean action ever).
   double-count, `user-cache` scan subtracts their bytes and shows `(excl. thumbnails/browser)`.
 - **Tests:** whitelist survivor; hot-write skip; byte accounting excludes sibling rules.
 
-## 3. `thumbnails` — Thumbnail cache 🟩
+## 3. `thumbnails` — Thumbnail cache — `+` safe
 - **Targets:** `~/.cache/thumbnails/**` (normal + large + x-large + xx-large).
 - **Action:** delete tree. Regenerated by file managers on demand.
 - **Age:** none. **Guard:** none. **Sudo:** no. **Config:** `enabled`.
 - **Preview:** `612 MiB · 8,940 files`.
 - **Tests:** exact byte count; directory recreated as empty on clean (or removed — decided: removed).
 
-## 4. `trash` — XDG trash 🟩
+## 4. `trash` — XDG trash — `+` safe
 - **Targets:** `~/.local/share/Trash/files/**` + `~/.local/share/Trash/info/**`.
 - **Action:** delete both trees. Preview counts trashed items and sums sizes.
 - **Age:** none. **Guard:** none. **Sudo:** no.
 - **Config:** `enabled`. **UI note:** "empties trash — permanent".
 - **Tests:** files+info removed; unrelated `~/.local/share` untouched.
 
-## 5. `journal-user` — User systemd journal 🟩
+## 5. `journal-user` — User systemd journal — `+` safe
 - **Targets:** user journal (`journalctl --user -o json` size probe → runtime dir
   under `~/.local/state/log/journal` or `/run/user/<uid>/log/journal`).
 - **Action:** argv `journalctl --user --vacuum-size=<max>`; if journalctl absent →
@@ -109,7 +106,7 @@ report-only (no clean action ever).
 - **Sudo:** no. **Config:** `[rules.journal-user] max_size = "100M"`.
 - **Tests:** argv exactness (mock journalctl in PATH via sandbox); absent-tool detect.
 
-## 6. `browser-cache` — Browser caches 🟩
+## 6. `browser-cache` — Browser caches — `+` safe
 - **Targets (globs):**
   - Firefox: `~/.cache/mozilla/firefox/*/cache2`, `startupCache`, `OfflineCache`
   - Chromium family: `~/.cache/{chromium,google-chrome,BraveSoftware/Brave-Browser,microsoft-edge}/*/Cache`, `Code Cache`, `GPUCache`, `Service Worker/CacheStorage`
@@ -123,7 +120,7 @@ report-only (no clean action ever).
 - **Tests:** guarded detect with fake `/proc` seed (proc scanner injectable);
   profile files (cookies.sqlite) survive; per-browser glob coverage.
 
-## 7. `editor-cache` — Editor caches 🟩
+## 7. `editor-cache` — Editor caches — `+` safe
 - **Targets:** `~/.config/Code/Cache`, `Code Cache`, `GPUCache`, `CachedData`,
   `CachedExtensionVSIXs`; same under `~/.config/Cursor`, `VSCodium`, `~/.vscode-oss`;
   `~/.config/{Slack,Discord,Element}/Cache*`.
@@ -131,7 +128,7 @@ report-only (no clean action ever).
 - **Guard:** app running. **Age:** 5-min hot skip. **Sudo:** no. **Config:** `enabled`.
 - **Tests:** settings survive (`User/settings.json` seeded); guard behavior.
 
-## 8. `tool-caches` — Dev tool caches 🟩
+## 8. `tool-caches` — Dev tool caches — `+` safe
 - **Targets & actions:**
   | Tool | Path | Action |
   |---|---|---|
@@ -154,7 +151,7 @@ report-only (no clean action ever).
 - **Tests:** per-tool fixture presence/absence; cargo `src/` and `bin/` survive;
   go `cache/download` only.
 
-## 9. `app-caches` — Misc app caches 🟩
+## 9. `app-caches` — Misc app caches — `+` safe
 - **Targets:** `~/.cache/electron`, `~/.cache/mesa_shader_cache`,
   `~/.cache/fontconfig`, `~/.cache/libvirt`, `~/.cache/gdk-pixbuf`,
   `~/.cache/ibus`, `~/.cache/dconf`, `~/.cache/glib-2.0`,
@@ -166,7 +163,7 @@ report-only (no clean action ever).
 - **Sudo:** no. **Config:** `enabled`, `extra_paths = []` (app-specific additions).
 - **Tests:** fixture matching; guarded ones respect process inject.
 
-## 10. `log-rotate` — Rotated logs 🟩
+## 10. `log-rotate` — Rotated logs — `+` safe
 - **Targets:** `/var/log/*.gz`, `/var/log/*.[0-9]`, `/var/log/*.1`,
   `/var/log/*-202[0-9]*.gz`, `/var/log/journal/*/*.journal~`;
   `~/.local/state/**/log/*.{gz,[0-9],[0-9][0-9]}`; `~/.cache/thunderbird/*/Mail/*.log` (if present).
@@ -181,7 +178,7 @@ report-only (no clean action ever).
   wrapper rule — see M5.)*
 - **Config:** `enabled`. **Tests:** live log survives, `.gz`/`.1` removed.
 
-## 11. `xdg-state-junk` — Crash dumps 🟩
+## 11. `xdg-state-junk` — Crash dumps — `+` safe
 - **Targets:** `~/.cache/*/Crashpad/{Reports,crashpad_metrics}*`,
   `~/.config/*/crashes`, `~/.local/share/*/Crashpad`, user coredumps
   `~/.local/state/libuuid/coredump/*` (files named `core.*`), `~/.cache/recently-used.xbel`? → **no** (user data).
@@ -193,9 +190,9 @@ report-only (no clean action ever).
 
 ---
 
-# 🟨 Caution rules
+# Tier `!` — caution rules
 
-## 12. `pacman-cache` — Pacman package cache 🟨 🔓
+## 12. `pacman-cache` — Pacman package cache — `!` caution · `sudo`
 - **Targets:** `/var/cache/pacman/pkg/*.pkg.tar.*` (+ `.sig` siblings).
 - **Action:** `paccache -rk{N}` with N = `keep_versions` (default **2**; `full`
   preset uses **0** unless `[rules.pacman-cache].keep_versions` set). Fallback if
@@ -210,7 +207,7 @@ report-only (no clean action ever).
 - **Tests:** argv (`-rk2`); keep_versions override; missing paccache detect;
   scan works without root.
 
-## 13. `journal-system` — System journald 🟨 🔓
+## 13. `journal-system` — System journald — `!` caution · `sudo`
 - **Targets:** `/var/log/journal` (+ `/run/log/journal` fallback).
 - **Action:** `journalctl --vacuum-size=<max>` (default `100M`).
 - **Guard:** journalctl present. **Sudo:** yes (system pass; scan = `journalctl --disk-usage` unprivileged when permitted, else estimate via `du` if readable).
@@ -218,7 +215,7 @@ report-only (no clean action ever).
 - **Preview:** `1.9 GiB → 100 MiB (vacuum)`.
 - **Tests:** argv; config parse of human sizes (K/M/G/T, KiB base).
 
-## 14. `aur-builds` — AUR build artifacts 🟨
+## 14. `aur-builds` — AUR build artifacts — `!` caution
 - **Targets:** `~/.cache/paru/clone/*/{src,pkg,pkg.tar.*}`, `~/.cache/yay/*/{src,pkg,pkg.tar.*}`,
   `~/.cache/paru/clone/*/*.log`, plus `~/.cache/.temp` makepkg temp.
 - **Kept:** the git checkouts themselves (`<repo>/.git` tree and working files
@@ -230,7 +227,7 @@ report-only (no clean action ever).
 - **Preview:** `12 repos · 8.9 GiB (src 7.1 · pkg 1.6 · logs 0.2) · git checkouts kept`.
 - **Tests:** `.git` survives; `src`/`pkg` removed; in-progress build (fresh mtime) kept.
 
-## 15. `orphans` — Orphaned packages 🟨 🔓
+## 15. `orphans` — Orphaned packages — `!` caution · `sudo`
 - **Detection:** `pacman -Qtdq` empty → Ready with 0 (shows `0 orphans`, disabled
   selection) or NotApplicable (choose: **Ready-0**, so the row explains "none found").
 - **Action:** `pacman -Rns -- <all pkgs>` in ONE invocation (batched; config
@@ -243,7 +240,7 @@ report-only (no clean action ever).
   distro matrix note).
 - **Tests:** argv batch; exclude list honored; empty-orphans display state.
 
-## 16. `flatpak-unused` — Unused Flatpak runtimes 🟨
+## 16. `flatpak-unused` — Unused Flatpak runtimes — `!` caution
 - **Detection:** `flatpak` binary + any installation (`flatpak remotes`).
 - **Preview:** `flatpak uninstall --unused --dry-run` output parsed → list runtimes
   + size (`flatpak list --runtime --columns=application,size` when available).
@@ -252,13 +249,14 @@ report-only (no clean action ever).
 - **Sudo:** no (user installation); system-wide installation present → needs_sudo=true for that half (split pass: user half user-pass, system half system-pass).
 - **Tests:** argv; no-flatpak detect; split-pass selection logic.
 
-## 17. `docker` — Docker reclaim 🟨 🔓*
+## 17. `docker` — Docker reclaim — `!` caution · `sudo`*
 - **Detection:** `docker` binary AND daemon reachable (`docker info` ≤ 2 s timeout).
 - **Preview (list-first, mandatory):** `docker system df --format json` →
   "dangling 42 images · 18.2 GiB reclaimable; build cache 6.1 GiB". Sub-rows:
-  `[ ] dangling images` (default ✔ when rule checked), `[ ] build cache`
-  (default ✗), `[ ] stopped containers` (default ✗, lists names), `[ ] unused
-  volumes` (default ✗ **and** requires typing `volumes` at confirm — volumes = data).
+  `[x] dangling images` (checkable; checked by default when the rule is selected),
+  `[ ] build cache` (unchecked by default), `[ ] stopped containers` (unchecked by
+  default, lists names), `[ ] unused volumes` (unchecked by default **and** requires
+  typing `volumes` at confirm — volumes = data).
 - **Action:** `docker image prune -f` / `docker builder prune -f` /
   `docker container prune -f` / `docker volume prune -f` (gated) — one argv per checked sub-row.
 - **Guard:** daemon unreachable → Guarded {"daemon not running"}.
@@ -267,15 +265,15 @@ report-only (no clean action ever).
 - **Tests:** sub-row defaults; volume gate requires typed word; unreachable daemon guard;
   JSON parse of `system df`.
 
-## 18. `podman` — Podman reclaim 🟨
+## 18. `podman` — Podman reclaim — `!` caution
 - **Detection:** `podman` present. **Preview:** `podman system df --format json`.
-- **Action:** `podman image prune -f` (+ build cache sub-row, default ✗);
+- **Action:** `podman image prune -f` (+ build cache sub-row, unchecked by default);
   **never** `podman system prune --all` (would kill stopped containers by default —
-  stopped-containers sub-row default ✗, lists names).
+  stopped-containers sub-row unchecked by default, lists names).
 - **Guard:** none. **Sudo:** no (rootless); rootful storage detected → system pass.
 - **Tests:** argv choices; rootless/rootful pass split.
 
-## 19. `dev-artifacts` — Stale build artifacts 🟨 *(the big one)*
+## 19. `dev-artifacts` — Stale build artifacts — `!` caution *(the big one)*
 - **Targets:** directories named in `paths`
   (`node_modules`, `target`, `.venv`, `__pycache__`, `.pytest_cache`, `.gradle`,
   `.cache/pypoetry`, `dist`? → **excluded** (may hold release builds), `build`? →
@@ -297,14 +295,14 @@ report-only (no clean action ever).
 - **Tests:** fresh vs stale dirs; `.git` boundary; exclude_paths; self-exclusion;
   age = newest descendant (seed nested file mtime).
 
-## 20. `steam-shader` — Steam shader cache 🟨
+## 20. `steam-shader` — Steam shader cache — `!` caution
 - **Targets:** `~/.steam/steam/appshadercache`, `~/.local/share/Steam/appshadercache`,
   `~/.local/share/Steam/shadercache/**`, `~/.steam/steam/steamapps/shadercache`.
 - **Action:** delete. **Warning note:** "shaders recompile → stutter on next launch".
 - **Guard:** `steam` process running → guarded. **Age:** none. **Sudo:** no.
 - **Tests:** glob coverage; guard.
 
-## 21. `snapshots-report` — btrfs/snapper report 📋 *(report-only)*
+## 21. `snapshots-report` — btrfs/snapper report — `~` report-only
 - **Detection:** root fstype == btrfs **and** (`snapper` present or `/etc/snapper/configs/*`).
 - **Output (always shown in scan when applicable, never selectable):**
   "btrfs · 3 configs · 48 snapshots · ~120 GiB (size via `snapper list -s`; if
@@ -315,13 +313,13 @@ report-only (no clean action ever).
 
 ---
 
-# 🟥 Destructive rules (`full` preset only)
+# Tier `#` — destructive rules (`full` preset only)
 
 All five: unlocked only under `--preset full` (or `p` → full in checklist), red
-rows with `🔒`, each independently gated by typed `PURGE` after a summary screen.
+rows with `lock`, each independently gated by typed `PURGE` after a summary screen.
 `--yes` does NOT bypass (D7); only `--i-know-what-im-doing` does.
 
-## 22. `downloads` — Entire `~/Downloads` 🟥
+## 22. `downloads` — Entire `~/Downloads` — `#` destructive
 - **Targets:** everything under `~/Downloads` (recursive), top-level entries moved
   through the same protected checks (sockets impossible but symlinks: unlinked, not followed).
 - **Preview (mandatory in gate screen):** total bytes, **file count**, **newest
@@ -337,7 +335,7 @@ rows with `🔒`, each independently gated by typed `PURGE` after a summary scre
 - **Tests:** keep-days survivors exact; symlinked Downloads refused; gate required
   even with `--yes`; `--i-know-what-im-doing` documented bypass works.
 
-## 23. `cache-deep` — Full `~/.cache` wipe 🟥
+## 23. `cache-deep` — Full `~/.cache` wipe — `#` destructive
 - **Targets:** all of `~/.cache` (whitelist ignored).
 - **Preview:** per-subdir count table (top 10) + grand total.
 - **Action:** delete entries inside `~/.cache` (dir itself recreated).
@@ -348,20 +346,20 @@ rows with `🔒`, each independently gated by typed `PURGE` after a summary scre
   fresh (<5 min) entries still skipped? → **decision: NOT skipped in cache-deep**
   (destructive = destructive, gate covers it) — test asserts.
 
-## 24. `tmp-full` — Full `/tmp` + `/var/tmp` 🟥
+## 24. `tmp-full` — Full `/tmp` + `/var/tmp` — `#` destructive
 - **Targets:** all entries incl. recent files.
 - **Keeps (non-negotiable):** the shared PROTECTED list + open-fd files.
 - **Action:** walker delete. **Age:** none. **Sudo:** no (root-owned leftovers
   reported as skipped with count — visible honesty).
 - **Tests:** protected/open-fd survivors under full mode; root-owned skip reporting.
 
-## 25. `pkgcache-zero` — Pacman cache → zero 🟥 🔓
+## 25. `pkgcache-zero` — Pacman cache → zero — `#` destructive · `sudo`
 - **Action:** `paccache -rk0` (fallback `pacman -Scc --noconfirm` when paccache absent).
 - **Gate extras:** warning line "updates after this re-download packages".
 - **Sudo:** yes. **Config:** none (its semantics are zero).
 - **Tests:** argv variants; warning text snapshot.
 
-## 26. `purge-logs` — All logs 🟥 🔓
+## 26. `purge-logs` — All logs — `#` destructive · `sudo`
 - **Targets:** `/var/log/*` contents (truncate live logs, delete archives), journal
   vacuum to `0`.
 - **Action:** truncate files in place (inode kept — services keep writing) rather
@@ -385,7 +383,7 @@ rows with `🔒`, each independently gated by typed `PURGE` after a summary scre
 \* `apt/dnf/zypper` clean rules are **generic cache-clean entries mapped onto rule id
 `pacman-cache`'s slot only in UI grouping** — actually they get their own ids
 (`apt-cache-clean` etc.) implemented in `rules/pkg.rs` as family-specific siblings
-with tier 🟨 keep semantics (apt: `apt clean` + `apt autoclean`; dnf: `dnf clean all`;
+with `!` (caution) keep semantics (apt: `apt clean` + `apt autoclean`; dnf: `dnf clean all`;
 zypper: `zypper clean --all`). They appear ONLY on their family. This keeps ids
 honest (no fake pacman on Debian).
 

@@ -1,13 +1,7 @@
 # sweep — CLI & Terminal UX (the *interface*)
 
 Complete command reference, prompt copy catalog, mock outputs, exit codes, env vars,
-tokens. Every string here is what ships (golden snapshots enforce it); the glyph
-note below is the one scheduled exception.
-
-> **Glyph note (D13):** examples below show the M1 emoji tier/state glyphs.
-> Rendered output is ASCII only from M2: `+` safe, `!` caution, `#` destructive,
-> `~` report-only, `[x]/[ ]` checkboxes, `lock`/`sudo`/`warn` labels. Goldens are
-> re-recorded in the same commit.
+tokens. Every string here is what ships (golden snapshots enforce it).
 
 ---
 
@@ -31,7 +25,7 @@ note below is the one scheduled exception.
 | `--dry-run` | – | plan preview: sample paths + would-run commands; zero changes |
 | `--json` | – | JSON stdout (schema `version:1`) |
 | `--no-color` | `NO_COLOR=1` | disable ANSI colors |
-| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII box chars, `[x]` instead of ✔ |
+| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII box drawing (`+ - |`) and `...` ellipsis instead of `│─┌…`; tier glyphs/labels (`+ ! # ~`), checkboxes (`[x]`/`[ ]`) and `lock`/`sudo`/`warn` markers are always ASCII (see §8) |
 | `--keep-days <N>` | `SWEEP_KEEP_DAYS` | override global age gate (N ≥ 0) |
 | `--trash` | `SWEEP_TRASH=1` | soft-delete to XDG trash instead of hard delete |
 | `--yes` / `-y` | `SWEEP_YES=1` | auto-confirm **safe & caution** prompts; **not** destructive |
@@ -72,19 +66,19 @@ Output mock (wide):
 
   Scanning… ████████████████████ 26/26 rules           4.1s
 
- ┌──────────┬──────────────────────────────┬────────────┬─────────┬────────┐
- │ tier     │ category                     │ location   │ size    │ files  │
- ├──────────┼──────────────────────────────┼────────────┼─────────┼────────┤
- │ 🟩 safe  │ tmp & var-tmp                │ /tmp       │ 1.2 GiB │  4211  │
- │ 🟩 safe  │ user caches                  │ ~/.cache   │ 8.4 GiB │ 61203  │
- │ 🟩 safe  │ thumbnails                   │ ~/.cache   │ 612 MiB │  8940  │
- │ 🟩 safe  │ trash                        │ ~/.local   │ 1.9 GiB │   612  │
- │ 🟩 safe  │ browser caches   ⚠ firefox running        │  3.1 GiB │ 22014  │
- │ 🟨 caut. │ pacman pkg cache  [keep 2]🔓 │ /var/cache │ 6.7 GiB │   310  │
- │ 🟨 caut. │ stale dev artifacts (30d+)   │ ~          │ 41.3 GiB │  3140  │
- │ 🟥 dang. │ full downloads 🔒            │ ~/Download │ 22.9 GiB │  1204  │
- │ 📋 info  │ btrfs snapshots (48, report) │ snapper    │   —     │    —   │
- └──────────┴──────────────────────────────┴────────────┴─────────┴────────┘
+ ┌──────────┬───────────────────────────────┬────────────┬──────────┬────────┐
+ │ tier     │ category                      │ location   │ size     │ files  │
+ ├──────────┼───────────────────────────────┼────────────┼──────────┼────────┤
+ │ + safe   │ tmp & var-tmp                 │ /tmp       │  1.2 GiB │  4211  │
+ │ + safe   │ user caches                   │ ~/.cache   │  8.4 GiB │ 61203  │
+ │ + safe   │ thumbnails                    │ ~/.cache   │ 612 MiB  │  8940  │
+ │ + safe   │ trash                         │ ~/.local   │  1.9 GiB │   612  │
+ │ + safe   │ warn firefox running          │ ~/.cache   │  3.1 GiB │ 22014  │
+ │ ! caut.  │ pacman pkg cache [keep 2] sudo│ /var/cache │  6.7 GiB │   310  │
+ │ ! caut.  │ stale dev artifacts (30d+)    │ ~          │ 41.3 GiB │  3140  │
+ │ # dang.  │ full downloads lock           │ ~/Download │ 22.9 GiB │  1204  │
+ │ ~ info   │ btrfs snapshots (48, report)  │ snapper    │    —     │    —   │
+ └──────────┴───────────────────────────────┴────────────┴──────────┴────────┘
   reclaimable: 40.2 GiB · regular preset selects: 13.3 GiB · scanned in 4.1s
 ```
 Exit: 0 (always, unless error → 1).
@@ -114,13 +108,13 @@ progress → summary card (§2.2b) → history append.
 #### 2.2b Summary card (every clean run)
 ```
   ╭──────────────────────────────────────────────────────╮
-  │  ✔ freed 13.3 GiB in 8.2s                           │
+  │  [x] freed 13.3 GiB in 8.2s                         │
   │     cleaned: 7 · skipped: 1 (firefox running)       │
   │     errors:  0                                      │
   │     log: ~/.local/state/sweep/logs/20261019T140311  │
   ╰──────────────────────────────────────────────────────╯
 ```
-Variants: partial failure adds `⚠ 2 errors (see log)` (exit 3); aborted gate adds
+Variants: partial failure adds `warn 2 errors (see log)` (exit 3); aborted gate adds
 `— aborted, nothing was deleted` (exit 2); dry-run adds `— dry run, nothing changed`;
 trash mode adds `moved to trash — empty trash to actually free the space`.
 
@@ -208,7 +202,7 @@ Standard clap: `sweep 0.1.0`, per-command help with examples section.
 
 ### 3.1 Layout
 Header box (identity + disk line) → scan progress → checklist card → live total bar.
-Rows: `[x] 🟩 safe  title   ⚠ guard 🔓 sudo  location` + right-aligned size.
+Rows: `[x] + safe  title   warn guard sudo  location` + right-aligned size.
 Row order: safe → caution → destructive → report-only (stable, docs-listed).
 
 ### 3.2 Keybindings
@@ -251,7 +245,7 @@ Typed `y`/`Y` only — **Enter = cancel** (documented, tested).
 
 ### P2 — per-caution-rule confirm (shown when a caution rule selected)
 ```
-  🟨 pacman package cache — paccache -rk2 (sudo)
+  ! pacman package cache — paccache -rk2 (sudo)
      6.7 GiB · 310 packages · keeping newest 2 versions
      [y/N]
 ```
@@ -260,7 +254,7 @@ docker → `docker system df` table; stopped containers/volumes → names.
 
 ### P3 — typed PURGE gate (per destructive category; after P1)
 ```
-  ⚠ DESTRUCTIVE: full downloads
+  warn DESTRUCTIVE: full downloads
     1,204 files · 22.9 GiB · newest: 2 hours ago · oldest: 3 years ago
     samples: archlinux-2026.10.01.iso · recordings/2026-08.flac · …
 
@@ -285,7 +279,7 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 
 ### P6 — running-app override
 ```
-  ⚠ firefox is running — cleaning its cache now may corrupt open sessions.
+  warn firefox is running — cleaning its cache now may corrupt open sessions.
   Clean anyway? [y/N] ▸
 ```
 
@@ -337,9 +331,9 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 
 | Token | Value | Use |
 |---|---|---|
-| safe color | `#4caf50` green | tier label, ✔ |
-| caution color | `#ffb300` amber | tier label, ⚠ |
-| destructive color | `#ef5350` red | tier label, 🔒, PURGE screen |
+| safe color | `#4caf50` green | tier label, `[x]` |
+| caution color | `#ffb300` amber | tier label, `warn` |
+| destructive color | `#ef5350` red | tier label, `lock`, PURGE screen |
 | info | `#4dd0e1` cyan | header, report-only |
 | dim | `#8a8a8a` | meta/locations/sizes secondary |
 | header box | cyan border, bold title | every command's first line |
@@ -347,7 +341,8 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 | age format | `2h`, `3d`, `47d`, `never` | previews |
 
 Width rules: ≥100 cols full · 60–99 drop `files`+`location`→tail · <60 two-line
-compact rows · `--no-unicode`: `+ [x] [ ] ! #` substitutes.
+compact rows · `--no-unicode`: box drawing and the ellipsis only (`│─┌…` → `|-+...`);
+tier glyphs `+ ! # ~`, checkboxes `[x] [ ]` and `lock`/`sudo`/`warn` are always ASCII.
 
 ## 9. JSON examples (v1, abridged)
 
