@@ -63,7 +63,7 @@ jobs:
       # Dependabot's actions group gets this wrong: it rewrites the SHA to
       # the stable ref while leaving `toolchain: beta` (PR #2, closed).
       # Re-resolve with: git ls-remote https://github.com/dtolnay/rust-toolchain refs/heads/beta
-      - uses: dtolnay/rust-toolchain@cfd9b706ae130cd7002f711c4a0614be17a387e5 # beta
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # beta
         with:
           toolchain: beta
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
