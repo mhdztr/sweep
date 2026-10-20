@@ -21,15 +21,12 @@ impl Tier {
         }
     }
 
-    /// Table tier glyph (CLI-UX §8: `+ [x] [ ] ! #`).
-    pub fn glyph(&self, unicode: bool) -> &'static str {
-        match (self, unicode) {
-            (Tier::Safe, true) => "\u{1f7e9}",        // 🟩
-            (Tier::Caution, true) => "\u{1f7e8}",     // 🟨
-            (Tier::Destructive, true) => "\u{1f7e5}", // 🟥
-            (Tier::Safe, false) => "+",
-            (Tier::Caution, false) => "!",
-            (Tier::Destructive, false) => "#",
+    /// Table tier glyph (CLI-UX §8: `+ [x] [ ] ! #`). ASCII only (D13).
+    pub fn glyph(&self) -> &'static str {
+        match self {
+            Tier::Safe => "+",
+            Tier::Caution => "!",
+            Tier::Destructive => "#",
         }
     }
 
@@ -118,10 +115,9 @@ mod tests {
         assert_eq!(Tier::Safe.as_str(), "safe");
         assert_eq!(Tier::Caution.as_str(), "caution");
         assert_eq!(Tier::Destructive.as_str(), "destructive");
-        assert_eq!(Tier::Safe.glyph(true), "\u{1f7e9}");
-        assert_eq!(Tier::Safe.glyph(false), "+");
-        assert_eq!(Tier::Caution.glyph(false), "!");
-        assert_eq!(Tier::Destructive.glyph(false), "#");
+        assert_eq!(Tier::Safe.glyph(), "+");
+        assert_eq!(Tier::Caution.glyph(), "!");
+        assert_eq!(Tier::Destructive.glyph(), "#");
         assert_eq!(Tier::Caution.label(), "caut.");
     }
 }
