@@ -10,6 +10,14 @@ updates:
       cargo-all:
         patterns: ["*"]
     open-pull-requests-limit: 5
+    ignore:
+      # jwalk 0.9 is unmaintained ("no longer maintained or supported" per its
+      # own changelog) and its API break removes the `read_children_error`
+      # field the walker relies on (src/scan/walker.rs). Stay on 0.8.x until
+      # the walker is ported to a maintained fork (dua-core) or the field is
+      # reworked. See CONTEXT.md R7.
+      - dependency-name: "jwalk"
+        versions: [">=0.9.0"]
 
   - package-ecosystem: github-actions
     directory: "/"

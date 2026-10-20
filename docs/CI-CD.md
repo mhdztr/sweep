@@ -176,12 +176,17 @@ full (GitHub-owned) `v5.0.0` tag.
 
 **Implementation note (M1.5):** the first real run surfaced two `unmaintained`
 advisories — `fxhash` (RUSTSEC-2025-0057, via `inquire`) and `number_prefix`
-(RUSTSEC-2025-0119, via `indicatif`). Both are ignored in `deny.toml` with
-dated justifications and follow-up hooks (M2 re-evaluates both dependency
-chains); neither is a vulnerability advisory. The `[bans]` duplicate warning
-is the expected `unicode-width` pair (0.1.x via indicatif, 0.2.x direct).
-The config uses cargo-deny 0.20's version-2 format, which has no `version =`
-key.
+(RUSTSEC-2025-0119, via `indicatif`). Both were ignored with dated
+justifications and follow-up hooks; neither is a vulnerability advisory.
+
+**Update (R7, 2026-10-20):** the first Dependabot cargo group PR retired both
+ignores. `indicatif` 0.18 dropped `number_prefix` and `inquire` 0.9 dropped
+`fxhash`, so neither advisory crate is in the graph any more and cargo-deny
+flagged the `ignore` entries as dead. `[advisories] ignore` is now empty — the
+list stays empty unless a future advisory genuinely reaches the graph. The
+`[bans]` duplicate warning is the expected `unicode-width` pair (0.1.x via
+indicatif, 0.2.x direct). The config uses cargo-deny 0.20's version-2 format,
+which has no `version =` key.
 
 ### 5.2 Unused dependencies
 
@@ -400,6 +405,11 @@ One-time GitHub settings (not YAML):
 - Dependabot alerts + security updates; `.github/dependabot.yml` with weekly,
   grouped updates for `cargo` and `github-actions`.
 - Secret scanning + **push protection**; private vulnerability reporting.
+- **Dependency graph must be enabled** (Settings > Security > Advanced
+  Security) before `dependency-review` can run. Without it every PR fails
+  `dependency-review` with "Dependency review is not supported on this
+  repository" — a settings gap, not a code failure. Enable it first, then
+  enable Dependabot alerts; the two share the same graph.
 - Branch protection on `main`: require `fmt`, `clippy`, `test`, `doctest`,
   `docs`, `release-build`, and `deny`; require a PR; dismiss stale approvals;
   block force-pushes.
