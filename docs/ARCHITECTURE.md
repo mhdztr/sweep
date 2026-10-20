@@ -308,7 +308,9 @@ walk(root):
   `files` column + shorten paths with `~/…/tail`; <60 → compact list rows
   (two-line per rule). `--no-unicode` swaps box drawing to ASCII; tier and state
   glyphs are ASCII in every mode (D13).
-- **Checklist:** `inquire::MultiSelect` with custom renderer; prompt text = header
+- **Checklist:** hand-rolled prompt loop (D14) over a pure, renderer-agnostic
+  `ui::checklist::Selection` state model plus a slice-2 renderer/event loop;
+  prompt text = header
   box; render loop re-renders live totals on every toggle. Keys: `space` toggle,
   `↑/↓` (also `Ctrl-P/N`), `a` all safe, `n` none, `i` invert, `p` preset cycle,
   `/` filter (v0.2 candidate), `enter` confirm, `esc`/`q`/`Ctrl-C` abort.

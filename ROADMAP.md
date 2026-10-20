@@ -122,10 +122,16 @@ Tasks:
       `+ ! #` unconditionally; width math + golden snapshots updated; README
       tier bullets plus CLI-UX/RULES-CATALOG/SAFETY examples updated in the
       same commit (decision D13). Done in R8.
-- [ ] `ui/checklist.rs`: inquire MultiSelect + custom renderer, keybindings
-      (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled)
-- [ ] Presets: safe/regular/full selection logic (full still gates destructive at M4 —
-      for now full == safe+caution selection preview with destructive rows shown "arrives M4")
+- [ ] `ui/checklist.rs`: hand-rolled prompt loop (D14; `inquire` not used) + keybindings
+      (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled/report-only)
+      — core (Selection, renderer-agnostic, tests) landed R9; renderer/event loop pending.
+      R9 covers: tier ordering with report-only rows last, sticky `--i-know-what-im-doing`
+      across preset cycles, guard precedence (`!applied` wins → `Disabled`; guarded
+      destructive stays locked outside `full`).
+- [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
+      unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
+      typed-PURGE *execution* still arrives M4, so `full` today is a selection
+      preview over safe+caution+destructive — no destructive run happens before M4)
 - [ ] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths
 - [ ] `exec/`: `del.rs` primitives (bottom-up, no-follow, prefix re-check, hot-skip),
       plan execution sequential, continue-on-error, per-rule Report

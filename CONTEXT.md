@@ -92,6 +92,20 @@ TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII.
 *Consequences:* width math + the golden snapshots changed; the UI specs'
 examples were updated to ASCII in the same commit as the code (M2, first task).
 
+**D14 — The interactive checklist is hand-rolled; `inquire` is not its renderer.**
+*Context:* ROADMAP M2 and ARCHITECTURE §7 planned `inquire::MultiSelect` with a
+custom renderer. inquire 0.9.4 was rewritten: `MultiSelectConfig` exposes only
+`vim_mode`/`page_size`/`keep_filter`/`reset_cursor` — no custom-keybinding hook and
+no per-row-state renderer, so the required keys (`space/a/n/i/p/enter/esc·q/Ctrl-C/?`)
+and row states (ready/guarded/locked/disabled/report-only) are not expressible.
+*Decision:* the checklist is a hand-rolled prompt loop (slice 2) over a pure,
+renderer-agnostic `ui::checklist::Selection` state model (slice 1). `inquire` is
+retained only for typed-`PURGE` input in `ui/confirm.rs` (M2/M4).
+*Rejected:* forcing inquire (can't express the keys/states); dropping inquire now
+(PURGE input not yet written).
+*Consequences:* the `Cargo.toml` machete ignore comment for `inquire` is corrected;
+ARCHITECTURE §7 updated; the core is unit-testable without a tty.
+
 ## 3. Conventions
 
 ### Code
@@ -168,7 +182,7 @@ state needed (no scratch files; PR/commit messages carry context).
 doc-conforming?) → `docs/SAFETY.md` (if deletion-related: treat as P0, apply PR
 safety checklist) → fix with tests + doc updates.
 
-**Playbook D — plan questions:** decisions are in §2 (D1–D13). If a question isn't
+**Playbook D — plan questions:** decisions are in §2 (D1–D14). If a question isn't
 covered: add a new record here (D14+) with context/decision/rejection — never
 silently diverge from a documented decision.
 
@@ -188,6 +202,7 @@ acceptance gate; verify checksums + provenance before publishing; update AUR
 | 2026-10-20 | R8 | M2 task 1 (D13 executed): M1 emoji tier glyphs replaced with ASCII `+ ! #` — `Tier::glyph()` lost its `unicode` param, 4 call sites in `src/ui/table.rs` updated, 4 non-ASCII goldens re-recorded, and CLI-UX/RULES-CATALOG/SAFETY examples converted with their D13 banners removed. `unicode-width` retained (ANSI strip + wide user data); no behavior change. |
 | 2026-10-20 | R7 | Dependabot's first cargo group PR (7 bumps) diagnosed: jwalk 0.9 is unmaintained and its API break (removed `read_children_error`) broke `src/scan/walker.rs`; pin held at 0.8.x and `jwalk >=0.9.0` added to Dependabot's ignore list. The same bump retired both advisory ignores: indicatif 0.18 dropped `number_prefix`, inquire 0.9 dropped `fxhash` — `deny.toml` `[advisories] ignore` is now empty. Other six bumps (comfy-table 8, dirs 7, indicatif 0.18, inquire 0.9, toml 1.1, clap_mangen 0.3) verified green across all checks including MSRV 1.88 |
 | 2026-10-20 | R6 | M1.5 infra landed: five workflows (ci/security/scheduled/release/packaging), `deny.toml` (two dated `unmaintained` ignores: fxhash via inquire, number_prefix via indicatif), `SECURITY.md`, `CHANGELOG.md`, Dependabot; Cargo metadata `rust-version = "1.88"` (discovered by bisection — comfy-table let-chains floor, above the 1.85 edition-2024 floor); release profile `strip = "debuginfo"` for `cargo auditable` survival; machete ignores in `[package.metadata.cargo-machete]`; actionlint placed in `security.yml` (resolves the ROADMAP parenthetical). No `sweep` behavior change (only a `src/config.rs` doc-comment link fix for the `docs` gate) |
+| 2026-10-20 | R9 | M2 task 2 slice 1: renderer-agnostic checklist core (`src/ui/checklist.rs`) — `Selection`/`RowState`/`Row` over `&[RuleResult]`, tier-grouped ordering (report-only rows last, D9), intent methods (toggle/select-all-safe/none/invert/preset-cycle), live `Totals`, `selected()`; SAFETY §2 defaults transcribed, destructive locked outside `full` (unlocked-but-unchecked under `full`, and under `--i-know-what-im-doing` in every preset — the flag is sticky across `p` cycles), `--yes` inert, guarded/report-only never selectable, `!applied` wins over guards (`Disabled`), guarded destructive stays locked outside `full`. No CLI wiring (`Commands::Clean` still stubbed). D14: checklist is hand-rolled, not inquire. Tests: `tests/checklist_core.rs` (no tty). |
 
 ## 8. Open questions
 
