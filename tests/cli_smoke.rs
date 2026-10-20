@@ -1,8 +1,8 @@
 //! CLI surface smoke tests: parsing, help/version, exit codes, stubs.
-//! Spec: docs/CLI-UX.md — messages here are copy-locked.
+//! Spec: docs/CLI-UX.md, messages here are copy-locked.
 //!
 //! Env-mutating tests live in `env_guard.rs` / `sandbox.rs` (own processes);
-//! this file only spawns child processes and must stay env-clean — `.env(...)`
+//! this file only spawns child processes and must stay env-clean, `.env(...)`
 //! below sets variables on the *child* only, which is the sanctioned pattern
 //! for CLI tests (plan §4).
 

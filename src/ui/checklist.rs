@@ -1,6 +1,6 @@
 //! Renderer-agnostic interactive checklist state (M2 task 2, slice 1).
 //! Spec: docs/CLI-UX.md §3; gates: docs/SAFETY.md §2.
-//! Pure: no I/O, no tty, no key handling — slice 2 owns the renderer/event loop.
+//! Pure: no I/O, no tty, no key handling, slice 2 owns the renderer/event loop.
 
 use crate::cli::Preset;
 use crate::rules::Tier;
@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 /// Rule ids whose rows are report-only (`~`, D9): visible, never selectable.
 ///
-/// TODO(M3): the btrfs/snapper snapshot rule populates this (see plan §9.3 —
+/// TODO(M3): the btrfs/snapper snapshot rule populates this (see plan §9.3;
 /// there is no report-only `Tier` yet, so the marker is an id list for now).
 const REPORT_ONLY_IDS: &[&str] = &[];
 
@@ -75,7 +75,7 @@ pub struct Selection {
     i_know_what_im_doing: bool,
 }
 
-/// Totals snapshot for the live bar (CLI-UX §3.4) — computed by one pass, O(n).
+/// Totals snapshot for the live bar (CLI-UX §3.4), computed by one pass, O(n).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Totals {
     pub selected_count: usize,
@@ -162,7 +162,7 @@ impl Selection {
             })
             .collect();
 
-        // Stable sort by (report-only last, tier rank) — input order preserved
+        // Stable sort by (report-only last, tier rank), input order preserved
         // within a group. `sort_by_key` is stable, so no index key is needed.
         rows.sort_by_key(row_sort_key);
 
@@ -380,10 +380,10 @@ fn row_bytes(r: &RuleResult) -> u64 {
 /// Initial row state from one scan result (SAFETY §2, normative matrix).
 ///
 /// Precedence, deliberate and test-covered:
-/// 1. report-only marker (D9) — never selectable, wins over everything;
-/// 2. `applied == false` — `Disabled` with its reason (the guard map cannot
+/// 1. report-only marker (D9), never selectable, wins over everything;
+/// 2. `applied == false`, `Disabled` with its reason (the guard map cannot
 ///    promote a rule the scan never applied to a *selectable* state);
-/// 3. guard held — `Guarded`, but **only** when the tier would otherwise be
+/// 3. guard held, `Guarded`, but **only** when the tier would otherwise be
 ///    selectable. A destructive row outside `full` stays `Locked` even when
 ///    guarded: SAFETY §2 ("destructive ... locked → unlocked-but-unchecked
 ///    under full") and CLI-UX §3.2 ("destructive rows: only when preset=full")

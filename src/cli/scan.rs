@@ -1,7 +1,7 @@
-//! `sweep scan` — read-only measurement. Spec: plan §2.16, `docs/CLI-UX.md` §2.1.
+//! `sweep scan`, read-only measurement. Spec: plan §2.16, `docs/CLI-UX.md` §2.1.
 //!
 //! **Render order (D-1 deviation):** the spinner runs on stderr DURING the
-//! scan and is cleared before anything else prints — the CLI-UX §2.1 mock
+//! scan and is cleared before anything else prints, the CLI-UX §2.1 mock
 //! shows the header box first; we intentionally do not (a scan can take
 //! seconds; the header must not scroll away above a live progress bar).
 //! Order: spinner → header → table → (`-v` detail lines) → footer.
@@ -22,7 +22,7 @@ pub fn run(root: Root) -> i32 {
         }
     };
 
-    // No SIGINT handler yet — cooperative cancel lands with the M2 exec
+    // No SIGINT handler yet, cooperative cancel lands with the M2 exec
     // milestone; M1 scan still threads the flag through for symmetry.
     let cancel = Arc::new(AtomicBool::new(false));
 
@@ -36,13 +36,13 @@ pub fn run(root: Root) -> i32 {
         ctx.flags.unicode,
     );
     // `tx` moves into scan::run; the ScanService (owner of the sender) drops
-    // when run() returns, closing the channel — the spinner thread then
+    // when run() returns, closing the channel, the spinner thread then
     // exits and clears its line before we print anything.
     let out = scan::run(&ctx, cancel, Some(tx));
     let _ = spinner.join();
 
     if ctx.flags.json {
-        // D-3: --json is stdout-only — a single JSON doc, nothing else.
+        // D-3: --json is stdout-only, a single JSON doc, nothing else.
         let report = crate::report::ScanReport::from_scan(&ctx, &out, ctx.flags.verbose > 0);
         let stdout = std::io::stdout();
         if serde_json::to_writer(stdout.lock(), &report).is_err() {

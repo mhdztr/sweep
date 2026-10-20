@@ -40,7 +40,7 @@ impl Theme {
         }
     }
 
-    /// Bold when colors are on (bold is gated by the same resolved flag —
+    /// Bold when colors are on (bold is gated by the same resolved flag;
     /// NO_COLOR disables all SGR, attributes included).
     pub fn bold(&self, s: &str) -> String {
         if self.color {
@@ -61,7 +61,7 @@ impl Theme {
 }
 
 /// Terminal width via `ioctl(TIOCGWINSZ)` on stdout; 80 when the ioctl fails
-/// (not a TTY — piped CI output) or the reported width is 0.
+/// (not a TTY, piped CI output) or the reported width is 0.
 pub fn terminal_width() -> usize {
     let mut ws = libc::winsize {
         ws_row: 0,
@@ -82,11 +82,11 @@ pub fn terminal_width() -> usize {
 }
 
 /// Header (plan §2.15 + D-1 render order: the header prints AFTER the scan
-/// finishes — see `cli/scan.rs`).
+/// finishes, see `cli/scan.rs`).
 ///
 /// Box geometry (documented interpretation of the CLI-UX §2.1 mock): the
 /// mock's border (`╭`+62×`─`+`╮`) is 1–2 chars wider than its own row lines
-/// (61 / 60) — it is internally inconsistent. We derive a self-consistent
+/// (61 / 60), it is internally inconsistent. We derive a self-consistent
 /// box instead: `inner = max(c1+c2+5, c3+3)`, so row 1 (`"  " + c1 + gap +
 /// c2 + " "` with gap ≥ 2) and row 2 (`"  " + c3 + " "`, padded) always fit
 /// their border exactly. For the mock's content this yields inner = 60
@@ -149,7 +149,7 @@ pub fn render_header(ctx: &Ctx, reclaimable: u64, width: usize, theme: &Theme) -
     )
 }
 
-/// Footer (exact plan §2.15 copy). Deliberately plain — `_theme` is accepted
+/// Footer (exact plan §2.15 copy). Deliberately plain, `_theme` is accepted
 /// for signature stability but no color is applied (plan: "Plain").
 /// Returned WITHOUT a trailing newline (callers `println!` it).
 pub fn render_footer(reclaimable: u64, regular: u64, scan_ms: u64, _theme: &Theme) -> String {

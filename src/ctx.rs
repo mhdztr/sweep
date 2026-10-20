@@ -1,6 +1,6 @@
 //! Runtime context: resolved flags + config + system info + run id.
 //!
-//! `Ctx::build` NEVER creates directories and NEVER acquires the lock —
+//! `Ctx::build` NEVER creates directories and NEVER acquires the lock;
 //! `scan` must mutate nothing (AGENTS.md safety invariant 2).
 
 use crate::cli::{Preset, Root};

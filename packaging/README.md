@@ -1,6 +1,6 @@
 # packaging
 
-**STATUS: PLANNED — no PKGBUILDs exist yet.** This directory holds the AUR
+**STATUS: PLANNED, no PKGBUILDs exist yet.** This directory holds the AUR
 packaging plan; the actual recipes land at **M7** (ROADMAP), once release
 artifacts exist to point at. The full design is `docs/CI-CD.md` §7.1.
 
@@ -24,9 +24,9 @@ copy, not the AUR repo.
 
 ## Package order
 
-1. `sweep-bin` — static `x86_64-unknown-linux-musl` tarball from the GitHub
+1. `sweep-bin`, static `x86_64-unknown-linux-musl` tarball from the GitHub
    release, verified with `sha256sums_x86_64`. No runtime dependencies.
-2. `sweep` — source tarball (`sweep-v<ver>-src.tar.gz`) built with
+2. `sweep`, source tarball (`sweep-v<ver>-src.tar.gz`) built with
    `cargo build --release --locked` (**not** `--frozen`), then
    `cargo test --release --locked` in `check()`.
 

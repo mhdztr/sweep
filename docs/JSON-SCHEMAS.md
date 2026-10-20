@@ -1,4 +1,4 @@
-# sweep — JSON Schemas (v1)
+# sweep: JSON Schemas (v1)
 
 > Spec of record: `docs/ARCHITECTURE.md` §11 (state/history) + §12 (schemas).
 
@@ -11,10 +11,10 @@
 | state | `~/.local/state/sweep/sweep.lock` | flock | n/a |
 | state/tmp | `system-pass-<run_id>.json` | plan for sudo re-exec | deleted after pass |
 | config | `~/.config/sweep/config.toml` | toml | user-owned |
-| cache | *(none in v0.1 — no persistent size cache; sizes always fresh)* | — | — |
+| cache | *(none in v0.1: no persistent size cache; sizes always fresh)* | — | — |
 | trash | `~/.local/share/Trash/{files,info}` | XDG trash | user-managed |
 
-**History record** — one JSON object per line in `history.jsonl`, appended after
+**History record**: one JSON object per line in `history.jsonl`, appended after
 every clean run (schema v1):
 
 ```jsonc
@@ -24,7 +24,7 @@ every clean run (schema v1):
  "freed_total":60123456789,"duration_ms":9211,"dry_run":false,"trash":false}
 ```
 
-**Audit log line schema** (see SAFETY §9) — every executed command and top-level
+**Audit log line schema** (see SAFETY §9), every executed command and top-level
 path-tree removal, with run_id correlation.
 
 

@@ -26,7 +26,7 @@ impl ScanSpinner {
     /// registry size before `detect` runs); the first `RuleDone` corrects it.
     ///
     /// **Deviation (documented):** the plan sketch is
-    /// `spawn(total, rx, show)` but *also* demands the ascii template — the
+    /// `spawn(total, rx, show)` but *also* demands the ascii template, the
     /// spinner cannot know the charset from `rx`, so `unicode` is an
     /// explicit parameter (callers pass `ctx.flags.unicode`).
     pub fn spawn(
@@ -54,7 +54,7 @@ impl ScanSpinner {
             while let Ok(ev) = rx.recv() {
                 if let ScanEvent::RuleDone { done, total, .. } = ev {
                     // Length comes FROM the event (the scan's Ready-rule
-                    // count), not from the spawn-time registry guess — with a
+                    // count), not from the spawn-time registry guess, with a
                     // NotApplicable rule the bar would otherwise sit at
                     // `3/4 rules` until it clears (critic finding).
                     pb.set_length(total as u64);

@@ -16,7 +16,7 @@ pub fn run_id_now() -> String {
     run_id_from_unix(secs)
 }
 
-/// Pure seam over unix seconds — testable without a clock.
+/// Pure seam over unix seconds, testable without a clock.
 pub fn run_id_from_unix(secs: u64) -> String {
     let days = (secs / 86_400) as i64;
     let rem = secs % 86_400;
@@ -96,7 +96,7 @@ pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
     use std::os::unix::fs::DirBuilderExt as _;
 
     let path = state_dir.join("sweep.lock");
-    // SAFETY (creation): std fs APIs, no unsafe involved — create_dir_all below.
+    // SAFETY (creation): std fs APIs, no unsafe involved, create_dir_all below.
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
@@ -120,7 +120,7 @@ pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
     // SAFETY: `fd` is a valid open descriptor owned by `file` (which outlives
     // the guard). flock with LOCK_EX|LOCK_NB takes an advisory lock without
     // dereferencing any pointer; a nonzero return means the lock is held by
-    // another process (or an OS error) — we never dereference memory here.
+    // another process (or an OS error), we never dereference memory here.
     let rc = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     if rc != 0 {
         let err = std::io::Error::last_os_error();
@@ -136,7 +136,7 @@ pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
         });
     }
 
-    // Record holder info (best effort — a failure here keeps the lock).
+    // Record holder info (best effort, a failure here keeps the lock).
     let pid = std::process::id();
     let since = utc_hhmm_now();
     let _ = std::fs::write(&path, format!("{pid}\n{since}\n"));

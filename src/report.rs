@@ -1,4 +1,4 @@
-//! JSON report models — `sweep scan --json`, schema v1. Spec: plan §2.13,
+//! JSON report models, `sweep scan --json`, schema v1. Spec: plan §2.13,
 //! `docs/CLI-UX.md` §9, `docs/ARCHITECTURE.md` §12.
 
 use crate::SCHEMA_VERSION;
@@ -19,7 +19,7 @@ pub struct ScanReport {
 pub struct HostInfo {
     pub distro: String,
     pub family: String,
-    /// `null` on Other — key always present.
+    /// `null` on Other, key always present.
     pub pkgman: Option<String>,
     pub fstype: String,
     /// Only with `-v` (omitted otherwise).
@@ -63,7 +63,7 @@ pub struct ConfigJson {
 impl ScanReport {
     /// Field order above = serialization order (serde preserves declaration
     /// order). Per-rule exactly the 11 spec keys (+ `samples` only when
-    /// verbose) — no extra keys (D-7). `host.hostname` / `samples` omitted
+    /// verbose), no extra keys (D-7). `host.hostname` / `samples` omitted
     /// unless verbose (ARCHITECTURE §12).
     pub fn from_scan(ctx: &Ctx, out: &ScanOutput, verbose: bool) -> ScanReport {
         ScanReport {

@@ -166,7 +166,7 @@ fn parse_message(text: &str, err: &toml::de::Error) -> String {
 /// AGENTS invariant 4 / ARCHITECTURE §0.2 say every `$HOME`-relative path
 /// goes through the resolved home (`dirs::config_dir()` reads `$HOME`/`$HOME/.config`
 /// itself). When `SWEEP_HOME` points a run at a sandbox home, the default
-/// config path must follow it — otherwise a sandboxed test would silently
+/// config path must follow it, otherwise a sandboxed test would silently
 /// load the developer's real `~/.config/sweep/config.toml` and become
 /// non-deterministic the moment such a file exists. Outside a sandbox the
 /// behavior is unchanged: exactly `dirs::config_dir()`.
@@ -284,7 +284,7 @@ mod tests {
     fn default_path_sandbox_follows_sweep_home_home() {
         // Env-free by design (M1 bans env-mutating tests): the sandbox probe
         // is a parameter, not a read. A SWEEP_HOME run must resolve ITS own
-        // config — never the developer's `~/.config/sweep/config.toml`
+        // config, never the developer's `~/.config/sweep/config.toml`
         // (AGENTS invariant 4; critic finding on `dirs::config_dir()`).
         let sandbox = PathBuf::from("/tmp/sweep-sandbox-home");
         assert_eq!(

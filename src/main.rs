@@ -14,7 +14,7 @@ fn main() {
 }
 
 fn dispatch(mut root: Root) -> i32 {
-    // take() (not unwrap_or) leaves `root` fully intact — the scan arm needs
+    // take() (not unwrap_or) leaves `root` fully intact, the scan arm needs
     // the global flags on it (`Ctx::build(&root)` reads them).
     let cmd = root.command.take().unwrap_or(Commands::Clean {
         only: Vec::new(),
@@ -40,27 +40,27 @@ fn dispatch(mut root: Root) -> i32 {
         }
 
         Commands::Scan => sweep::cli::scan::run(root),
-        Commands::Clean { .. } => not_yet("clean", "M2 — interactive clean"),
-        Commands::Top { .. } => not_yet("top", "M6 — biggest-dirs report"),
-        Commands::History { .. } => not_yet("history", "M4 — run history"),
-        Commands::Doctor => not_yet("doctor", "M5 — environment diagnostics"),
+        Commands::Clean { .. } => not_yet("clean", "M2: interactive clean"),
+        Commands::Top { .. } => not_yet("top", "M6: biggest-dirs report"),
+        Commands::History { .. } => not_yet("history", "M4: run history"),
+        Commands::Doctor => not_yet("doctor", "M5: environment diagnostics"),
         Commands::Rules {
             command: RulesCommand::List { .. },
-        } => not_yet("rules list", "M3 — rule catalog registry"),
+        } => not_yet("rules list", "M3: rule catalog registry"),
         Commands::Config {
             command: ConfigCommand::Init { .. },
-        } => not_yet("config init", "M6 — configuration"),
+        } => not_yet("config init", "M6: configuration"),
         Commands::Config {
             command: ConfigCommand::Path,
-        } => not_yet("config path", "M6 — configuration"),
+        } => not_yet("config path", "M6: configuration"),
         Commands::Config {
             command: ConfigCommand::Edit,
-        } => not_yet("config edit", "M6 — configuration"),
+        } => not_yet("config edit", "M6: configuration"),
     }
 }
 
 fn not_yet(cmd: &str, milestone: &str) -> i32 {
-    eprintln!("error: `sweep {cmd}` is not implemented yet — lands in {milestone}");
+    eprintln!("error: `sweep {cmd}` is not implemented yet: lands in {milestone}");
     eprintln!("hint: `sweep --version` and `sweep completion <shell>` work today; see ROADMAP.md");
     1
 }

@@ -1,11 +1,11 @@
 # sweep
 
-**Advanced, safety-first storage cleaner for Linux — Arch-first, distro-aware everywhere.**
+**Advanced, safety-first storage cleaner for Linux, Arch-first, distro-aware everywhere.**
 
 `sweep` scans your system for reclaimable space, lets you toggle cleanup categories
 in a color-coded checklist, and cleans them behind explicit safety gates. Regular
 cleanup is a two-key affair; the *full purge* (everything, including your entire
-`~/Downloads`) demands you type `PURGE` per category — on purpose.
+`~/Downloads`) demands you type `PURGE` per category, on purpose.
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
 > what works today. **`sweep scan` works** (M1: read-only measurement, table +
@@ -17,10 +17,10 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 Six wiki pages (`paccache`, `journalctl --vacuum`, `docker system df`, AUR cache
 locations, orphan removal, browser caches) collapse into one checklist with:
 
-- **Tiers of danger** — safe defaults · opt-in cautions · gated destruction
-- **Nothing blind** — scan first, sizes + counts + newest-file age before any delete
-- **Honest skips** — running Firefox, live sockets, open files: reported, never silently touched
-- **Scriptable** — `--json`, stable exit codes, `--dry-run`, presets for automation
+- **Tiers of danger**: safe defaults · opt-in cautions · gated destruction
+- **Nothing blind**: scan first, sizes + counts + newest-file age before any delete
+- **Honest skips**: running Firefox, live sockets, open files: reported, never silently touched
+- **Scriptable**: `--json`, stable exit codes, `--dry-run`, presets for automation
 
 ## Quickstart
 
@@ -42,23 +42,23 @@ sweep clean --preset full --dry-run      # preview the deep purge, touch nothing
 ## Safety invariants (non-negotiable)
 
 1. `scan` and `--dry-run` never modify anything (CI-enforced).
-2. Destructive rules only exist under `full` and require typed `PURGE` per category —
+2. Destructive rules only exist under `full` and require typed `PURGE` per category;
    `--yes` does **not** bypass them.
 3. Hardcoded never-touch list: your Documents/Pictures/Videos/Projects, `/etc`,
    `/usr`, live sockets, `systemd-private-*`, open files, `.git` histories.
-4. Sudo happens once, batched, after user-level cleanup — or not at all (decline = skip + report).
+4. Sudo happens once, batched, after user-level cleanup, or not at all (decline = skip + report).
 
 Full model: [docs/SAFETY.md](docs/SAFETY.md).
 
 ## Commands
 
 `scan` · `clean` · `top` · `history` · `doctor` · `rules list` ·
-`config init|path|edit` · `completion <shell>` — details in [docs/CLI-UX.md](docs/CLI-UX.md).
+`config init|path|edit` · `completion <shell>`, details in [docs/CLI-UX.md](docs/CLI-UX.md).
 
 ## Install (once v0.1 ships)
 
 ```sh
-# Arch (AUR) — planned at M7
+# Arch (AUR): planned at M7
 yay -S sweep-bin        # prebuilt static binary
 yay -S sweep            # source build
 # or from a checkout
@@ -84,4 +84,4 @@ cargo install --path .
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

@@ -4,7 +4,7 @@
 //! Determinism: fixture-driven sizes, `Ctx::for_test` host fields, fixed
 //! `scan_ms` (410), `display_path` locations (home-relative, never an
 //! absolute tempdir path); non-verbose output renders no ages. Snapshots are
-//! created deliberately — run, INSPECT each `.snap.new`, then accept via
+//! created deliberately, run, INSPECT each `.snap.new`, then accept via
 //! `cargo insta review` / rename (never blind-accept; AGENTS.md).
 
 mod common;
@@ -23,7 +23,7 @@ fn render(width: usize, theme: Theme) -> String {
     let mut out = sweep::scan::run(&ctx, cancel, None);
     out.totals.scan_ms = 410; // pinned for snapshot determinism
     // No path sanitization: every `location` is rendered through
-    // `display_path(home, …)`, so fixture paths come out as `~/…` — content
+    // `display_path(home, …)`, so fixture paths come out as `~/…`, content
     // and column widths are deterministic WITHOUT rewriting anything (the
     // old `<HOME>` replace existed to mask the tmp rule's joined non-spec
     // "/tmp, /var/tmp"-style location; that string is gone by design). A

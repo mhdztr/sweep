@@ -290,7 +290,7 @@ fn guarded_rows_unchecked_by_default() {
 #[test]
 fn destructive_guarded_stays_locked_outside_full() {
     // SAFETY §2: destructive rows are toggleable only under `full`. A guard must
-    // never widen what is selectable — a guarded destructive row stays Locked.
+    // never widen what is selectable, a guarded destructive row stays Locked.
     let g = guards(&[("dang", "docker daemon running")]);
     let events = vec![rr("dang", Tier::Destructive, true, 100)];
     for preset in [Preset::Safe, Preset::Regular] {
@@ -322,7 +322,7 @@ fn destructive_guarded_stays_locked_outside_full() {
 
 #[test]
 fn not_applied_guarded_is_disabled() {
-    // A rule the scan never applied (with a reason) is Disabled — the guard map
+    // A rule the scan never applied (with a reason) is Disabled, the guard map
     // cannot promote it to a selectable Guarded row.
     let g = guards(&[("tmp", "should not win")]);
     let events = vec![rr("tmp", Tier::Safe, false, 0)];

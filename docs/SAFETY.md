@@ -1,23 +1,23 @@
-# sweep — Safety Model (the *guarantees*)
+# sweep: Safety Model (the *guarantees*)
 
 Mantra: **no deletion happens without the user having seen the size, the count,
-and the tier of what's about to go — and every destructive path is abortable.**
+and the tier of what's about to go, and every destructive path is abortable.**
 
 This document is normative: if code contradicts it, code is wrong.
 
 ---
 
-## 1. Threat model — what we defend against
+## 1. Threat model: what we defend against
 
 | # | Scenario | Defense |
 |---|---|---|
-| T1 | **User error** — fat-finger selects Downloads | tier defaults (destructive off), summary P1 with default=cancel, typed PURGE per category, newest-age display |
-| T2 | **Script misuse** — `--yes` in a cron job wiping everything | `--yes` never bypasses destructive (D7); only explicit `--i-know-what-im-doing`; timer unit ships report-only |
+| T1 | **User error**: fat-finger selects Downloads | tier defaults (destructive off), summary P1 with default=cancel, typed PURGE per category, newest-age display |
+| T2 | **Script misuse**: `--yes` in a cron job wiping everything | `--yes` never bypasses destructive (D7); only explicit `--i-know-what-im-doing`; timer unit ships report-only |
 | T3 | **Symlink race** in shared `/tmp` (entry swapped between scan & delete) | never follow symlinks anywhere; fd-relative unlink where feasible; protected/`S_ISSOCK` re-check at execution time |
-| T4 | **Wrong scope** — walker descends into a mount (external HDD, bind mount, NFS) with different content | mount-bounded walks (device id check at every subtree) |
-| T5 | **Stale/tampered sudo plan** — a crafted plan file escalates deletions | plan JSON carries schema version + HMAC-ish checksum (sha256 of canonical plan + uid + run_id written by parent; child re-verifies), child re-runs `detect()` per rule, child re-validates gate acks; plan file in `state/tmp` with 0600, deleted after |
-| T6 | **Silent partial failure** — half-cleaning reported as success | continue-on-error + exit 3 + summary always lists errors/skips |
-| T7 | **Config tricks** — user custom rule points at `/etc` or `~` root | custom rule validation: expanded path must be ≠ home/root, not under `/etc,/usr,/boot,/var/lib`; destructive custom still needs PURGE gate |
+| T4 | **Wrong scope**: walker descends into a mount (external HDD, bind mount, NFS) with different content | mount-bounded walks (device id check at every subtree) |
+| T5 | **Stale/tampered sudo plan**: a crafted plan file escalates deletions | plan JSON carries schema version + HMAC-ish checksum (sha256 of canonical plan + uid + run_id written by parent; child re-verifies), child re-runs `detect()` per rule, child re-validates gate acks; plan file in `state/tmp` with 0600, deleted after |
+| T6 | **Silent partial failure**: half-cleaning reported as success | continue-on-error + exit 3 + summary always lists errors/skips |
+| T7 | **Config tricks**: user custom rule points at `/etc` or `~` root | custom rule validation: expanded path must be ≠ home/root, not under `/etc,/usr,/boot,/var/lib`; destructive custom still needs PURGE gate |
 | T8 | **Two sweeps at once** corrupting state or racing deletes | `flock` single-instance lock for **mutating runs only** (`state/sweep.lock`); second mutating instance exits 1 with pid info |
 | T9 | **Low disk / read-only state** mid-run | log/history write failures degrade to warnings (never abort clean); trash mode pre-checks free space |
 | T10 | **Running-app corruption** (browser/editor/docker in use) | process guards at detect + execution; docker list-first; volume sub-gate typed word |
@@ -45,14 +45,14 @@ kernel/filesystem bugs.
 2. `--dry-run` stops before `Execute`; prints samples (≤20/rule) + argv list.
 3. Enter/`y`/`Y` semantics: P1 and P2 accept only literal `y`/`Y` (Enter = no).
    P3 accepts only exact `PURGE`.
-4. Any prompt: `Esc`/`Ctrl-C` → abort message `— nothing was deleted` → exit 2.
+4. Any prompt: `Esc`/`Ctrl-C` → abort message `aborted, nothing was deleted` → exit 2.
 5. Execution re-validates each target against the allowed-prefix list
    (independent second check, not trusting the plan alone).
 
 ## 3. Never-touch list (hardcoded; not configurable away)
 
 - **Home & user data:** `$HOME` itself; `~/Documents`, `~/Pictures`, `~/Videos`,
-  `~/Music`, `~/Projects`, `~/Desktop` — **no rule may root here** (only
+  `~/Music`, `~/Projects`, `~/Desktop`, **no rule may root here** (only
   `~/Downloads` destructively, `~/.cache*` and `~/.config/<app>/Cache*` scoped
   otherwise). Custom rules targeting these roots are rejected at config validation.
 - **System:** `/etc`, `/usr`, `/boot`, `/var/lib/pacman`, `/var/lib/container*`
@@ -61,12 +61,12 @@ kernel/filesystem bugs.
   `.ICE-unix`, `.X*-lock`, sockets/FIFOs/device nodes, any path with an open fd.
 - **Symlinks:** never followed (scan counts size 0 & doesn't descend; delete
   unlinks the link itself only when the link's parent rule applies).
-- **The sweep repo itself** (`Ctx::exe_dir` walk-up to `.git`) — excluded from
+- **The sweep repo itself** (`Ctx::exe_dir` walk-up to `.git`), excluded from
   `dev-artifacts` and custom `$HOME`-scoped rules.
-- **`.git` directories** — `dev-artifacts` never enters them (project history).
-- **Volumes (docker/podman)** — never in default selection; typed-word gate (P5).
-- **btrfs snapshots** — report-only, D9, never deleted.
-- **Live journald/log inodes** under `purge-logs` — truncated, not unlinked.
+- **`.git` directories**: `dev-artifacts` never enters them (project history).
+- **Volumes (docker/podman)**: never in default selection; typed-word gate (P5).
+- **btrfs snapshots**: report-only, D9, never deleted.
+- **Live journald/log inodes** under `purge-logs`, truncated, not unlinked.
 
 ## 4. Age gates (normative defaults)
 
@@ -109,7 +109,7 @@ scan/UI boundary.
 |---|---|---|
 | one rule's delete fails (EACCES/EBUSY) | collect error, continue other rules, summary + log detail | 3 |
 | scan of one rule unreadable | rule shows `? error (reason)`, excluded from totals with note | 0 |
-| Esc / Ctrl-C at any prompt | `aborted — nothing was deleted` | 2 |
+| Esc / Ctrl-C at any prompt | `aborted, nothing was deleted` | 2 |
 | Ctrl-C during execution | finish current rule, mark rest `skipped (aborted)`, print partial summary | 2 |
 | sudo declined | system items `skipped (sudo declined)`; user pass result stands | 0 (or 3 if a selected rule errored) |
 | sudo pass command fails | errors reported per item | 3 |
@@ -127,7 +127,7 @@ parent (user pass complete):
        { schema:1, run_id, uid, created_at, cfg_hash,
          items:[{id, params…, purge_ack: bool}], digest: sha256(canonical ∪ secret-less fields ∪ uid) }
   3. prompt P4 (once) → if declined: mark skipped, done
-  4. exec `sudo --preserve-env=SWEEP_CONFIG? no — env NOT preserved;
+  4. exec `sudo --preserve-env=SWEEP_CONFIG? no, env NOT preserved;
      argv: sweep --internal-system-pass <path>`   (argv only, no shell)
 child (internal pass):
   5. re-parse, rebuild Ctx (fresh config read), verify uid == plan.uid,
@@ -165,7 +165,7 @@ duration_ms, dry_run. Pruned to `history_keep_runs` (100).
   `Trash/info/<name>.trashinfo` (deletionDate, path). Refuses if free space <
   5% + 512 MiB (would double-use space). UI states "space is NOT freed until you
   empty trash".
-- Hard deletes have **no undo** — honesty copy in P1: "deletions are permanent".
+- Hard deletes have **no undo**: honesty copy in P1: "deletions are permanent".
 - Mitigations: dry-run first, gates, logs with samples, age gates, `--keep-days`.
 
 ## 10. Concurrency & environment hardening
@@ -183,7 +183,7 @@ duration_ms, dry_run. Pruned to `history_keep_runs` (100).
 - [ ] New/changed rule has: tier justification, protected/age/guard behavior, tests
       for detect/scan/clean/gate (per RULES-CATALOG §test coverage requirement)
 - [ ] No new deletion path outside `exec/del.rs` primitives
-- [ ] No `$HOME` string literal — uses `Ctx::home`
+- [ ] No `$HOME` string literal, uses `Ctx::home`
 - [ ] No `sh -c`, no new network, no `unwrap()` outside tests
 - [ ] Destructive changes ship WITH their gate in the same change (D-safety rule)
 - [ ] Docs updated: `docs/RULES-CATALOG.md` + `docs/CLI-UX.md` copy catalog

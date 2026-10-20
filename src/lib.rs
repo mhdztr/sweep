@@ -1,4 +1,4 @@
-//! sweep — advanced, safety-first storage cleaner for Linux.
+//! sweep, advanced, safety-first storage cleaner for Linux.
 //!
 //! Library target exists so integration tests (and the CLI) share the same
 //! code paths. See `docs/ARCHITECTURE.md` for module responsibilities.

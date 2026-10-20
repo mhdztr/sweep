@@ -1,4 +1,4 @@
-# sweep — Architecture (the *how*, structure)
+# sweep: Architecture (the *how*, structure)
 
 Rust binary crate; single static-friendly binary; no workspace in v1 (split only if
 a `sweep-lib` ever becomes useful). Edition: latest stable Rust. MSRV: stable − 2.
@@ -161,7 +161,7 @@ struct RunReport {
 
 **Error taxonomy** (`thiserror`):
 `ConfigError` (parse/validation with line+key context) ·
-`ScanError` (io on a path — degraded: rule shows `?` with error, run continues) ·
+`ScanError` (io on a path, degraded: rule shows `?` with error, run continues) ·
 `PlanError` (unknown rule id, invalid preset combo) ·
 `GateError` (aborted, wrong PURGE text → maps to exit 2) ·
 `ExecError` (per-rule io/command failures → collected, exit 3 at end) ·
@@ -224,13 +224,13 @@ single JSON result on stdout for the parent to parse (parent never trusts free t
   (default = available_parallelism) so a huge home scan can't starve the UI.
 - **Cancellation:** `AtomicBool` token checked per directory entry; SIGINT sets it;
   walker returns partial `ScanInfo` marked `partial: true` (scan phase: drop rule
-  from selection with note; execution phase: finish current rule then abort — §SAFETY).
+  from selection with note; execution phase: finish current rule then abort; §SAFETY).
 - **Execution is sequential by design** (predictable output, ordered progress, no
   parallel `rm` storms); only internal walker of each rule may parallelize.
 - **Single-instance lock:** `flock` on `~/.local/state/sweep/sweep.lock` is
   acquired by **mutating** commands (a clean run start, the sudo system pass,
   state writes) for the whole mutating run. Read-only commands (`scan`, `top`,
-  `history`, `doctor`) never create or acquire the lock — `scan` must mutate
+  `history`, `doctor`) never create or acquire the lock; `scan` must mutate
   nothing (§0.2). A second mutating instance exits 1 with
   `another sweep is running (pid N, since HH:MM)`.
 
@@ -259,7 +259,7 @@ walk(root):
 - **Implementation notes (M1, jwalk 0.8):** subtree pruning happens in
   `process_read_dir` via `children.retain` (a pruned entry is **neither yielded
   nor descended**); children are sorted inside the same callback (deterministic
-  walk order); `skip_hidden(false)` is set explicitly — jwalk's default is
+  walk order); `skip_hidden(false)` is set explicitly: jwalk's default is
   `true`, which would silently drop dotfiles from caches/tmp; the age gate
   filters **non-dir** entries at count time (directories are always counted,
   at 0 bytes); one `lstat` per entry, with mtime/dev stashed in jwalk's
@@ -267,22 +267,22 @@ walk(root):
   the mount-bound check for fixtures); symlinks count as 0-byte files and are
   never followed; directories contribute 0 bytes, so scan totals are file-size
   sums only (du tolerance: compare against `du --apparent-size`, which also
-  counts dir inodes — expect the scan ≤ du).
-- **Protected list** shared between walker (scan) and `del.rs` (execute) — one
+  counts dir inodes; expect the scan ≤ du).
+- **Protected list** shared between walker (scan) and `del.rs` (execute): one
   source of truth (`rules::tmp::PROTECTED`, glob patterns + `S_ISSOCK/S_ISFIFO`).
-- **Age computation:** `age = now − newest_mtime` (atime unreliable on noatime fs —
+- **Age computation:** `age = now − newest_mtime` (atime unreliable on noatime fs,
   documented; `min_age_days` for dev-artifacts uses **mtime** too, i.e. "untouched
   since last write", which is what "stale build dir" means).
 - **Cache within run:** `scan::run` results memoized in `Ctx`-adjacent `ScanCache`
   so checklist totals, dry-run previews, and execution sizes never re-walk.
-- **Budgets:** hard display budget — scan phase shows elapsed ticker >1 s; if a rule
-  exceeds `scan.slow_after_ms` (default 2000), UI adds "(large — still scanning)".
+- **Budgets:** hard display budget. Scan phase shows elapsed ticker >1 s; if a rule
+  exceeds `scan.slow_after_ms` (default 2000), UI adds "(large, still scanning)".
 
 ## 6. Execution engine
 
 1. **Order:** user pass order = rule registration order (stable, docs-listed);
    system pass = same, appended after (so output groups "user" then "system").
-2. **Deletion primitives** (`exec/del.rs`): `remove_tree(path, protected)` —
+2. **Deletion primitives** (`exec/del.rs`): `remove_tree(path, protected)`,
    bottom-up, never following symlinks, refusing `/`, refusing anything not under
    an allowed prefix (double-check at execute time, independent of plan), on same-fs
    dirs uses `rename` to a temp name first then unlinks (best-effort atomicity).
@@ -301,7 +301,7 @@ walk(root):
 ## 7. UI layer
 
 - **Theme tokens:** `tier.safe=#4caf50`, `tier.caution=#ffb300`,
-  `tier.destructive=#ef5350`, `info=#4dd0e1`, `dim=#8a8a8a`, `header_bg`… — all
+  `tier.destructive=#ef5350`, `info=#4dd0e1`, `dim=#8a8a8a`, `header_bg`… all
   resolved through `should_color()` = `NO_COLOR` unset ∧ `--no-color` absent ∧
   `TERM != dumb` ∧ (tty or `--color always`).
 - **Width handling:** `terminal_size()`; ≥100 cols → full table; 60–99 → drop
@@ -316,7 +316,7 @@ walk(root):
   `/` filter (v0.2 candidate), `enter` confirm, `esc`/`q`/`Ctrl-C` abort.
 - **Row states:** `[x]/[ ]`, tier glyph (`+`/`!`/`#`), title, guard note,
   `sudo`/`lock` labels, right-aligned human size. Guarded rows show
-  `[!] reason` and are *refused* at confirm if checked (msg: "browser running —
+  `[!] reason` and are *refused* at confirm if checked (msg: "browser running, "
   re-run after closing, or use --force-guards" *(flag intentionally deferred to
   Could)*).
 - **Progress:** scan = single spinner + "n/m rules" + elapsed; clean = per-rule
@@ -329,7 +329,7 @@ walk(root):
 Arch: `pacman` → (`paru`|`yay` for AUR rule presence), Debian: `apt`, Fedora: `dnf`,
 Suse: `zypper`.
 
-**Command argv table (never through a shell — `std::process::Command` argv only):**
+**Command argv table (never through a shell; `std::process::Command` argv only):**
 
 | Rule | argv ( Arch ) |
 |---|---|
@@ -350,7 +350,7 @@ per config `snapper list --csv` → count + `total size` if column present else
 `du -s --apparent-size` **not** run (too slow) → report "N snapshots (size n/a:
 run `sudo snapper list -s`)" when the size column is absent.
 
-## 9. Config (`~/.config/sweep/config.toml`) — full key reference
+## 9. Config (`~/.config/sweep/config.toml`): full key reference
 
 Precedence: **CLI flags > env > config file > built-in defaults.**
 
@@ -372,7 +372,7 @@ follow_mounts = false                # (reserved) always false in v0.1
 include = []                      # extra rule ids pre-checked
 exclude = ["docker"]              # rule ids never pre-checked by regular
 
-# per-rule sections — keys validated against the rule's schema; unknown key = error
+# per-rule sections: keys validated against the rule's schema; unknown key = error
 [rules.tmp]
 enabled = true
 
@@ -395,7 +395,7 @@ keep_days = 0                     # rescue: skip files newer than N days (0 = no
 [rules.orphans]
 confirm_batch = 200               # if more than N orphans, paginate list at confirm
 
-[[custom]]                        # user-defined rules — see ARCHITECTURE §10
+[[custom]]                        # user-defined rules (see ARCHITECTURE §10)
 id = "iso-archive"
 title = "Old ISO images"
 paths = ["~/Archives/isos"]
@@ -405,7 +405,7 @@ tier = "caution"                  # safe|caution|destructive
 sudo = false
 ```
 
-**Validation:** unknown top-level keys warn (not fail) — forward compatible;
+**Validation:** unknown top-level keys warn (not fail), forward compatible;
 unknown `[rules.<id>]` for a *known* rule = error with suggestion; `[custom]`
 validated strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
 `older_than_days` required ≥ 0, reserved prefixes `tmp-`, `pacman-` rejected).
@@ -427,10 +427,10 @@ root path validation requires absolute expanded path outside `/etc,/usr,/boot`.
 | state | `~/.local/state/sweep/sweep.lock` | flock | n/a |
 | state/tmp | `system-pass-<run_id>.json` | plan for sudo re-exec | deleted after pass |
 | config | `~/.config/sweep/config.toml` | toml | user-owned |
-| cache | *(none in v0.1 — no persistent size cache; sizes always fresh)* | — | — |
+| cache | *(none in v0.1: no persistent size cache; sizes always fresh)* | — | — |
 | trash | `~/.local/share/Trash/{files,info}` | XDG trash | user-managed |
 
-**History record** — one JSON object per line in `history.jsonl`, appended after
+**History record:** one JSON object per line in `history.jsonl`, appended after
 every clean run (schema v1):
 
 ```jsonc
@@ -440,7 +440,7 @@ every clean run (schema v1):
  "freed_total":60123456789,"duration_ms":9211,"dry_run":false,"trash":false}
 ```
 
-**Audit log line schema** (see SAFETY §9) — every executed command and top-level
+**Audit log line schema** (see SAFETY §9): every executed command and top-level
 path-tree removal, with run_id correlation.
 
 ## 12. JSON outputs & versioning
@@ -467,7 +467,7 @@ path-tree removal, with run_id correlation.
 | 0 | success; also "nothing to clean"/"nothing selected"; also pure dry-run |
 | 1 | `ConfigError`, `PlanError`(unknown rule/preset), io failure building Ctx, internal panic caught by hook, lock held |
 | 2 | `GateError` (user abort: esc, wrong PURGE, Ctrl-C at prompt) |
-| 3 | run completed with ≥1 `ExecError` or system-pass failure — summary prints details |
+| 3 | run completed with ≥1 `ExecError` or system-pass failure; summary prints details |
 
 `--quiet` suppresses non-essential output but never suppresses errors/summary of
 exit ≠ 0. `-v` adds per-rule argv + errno context.
@@ -508,12 +508,12 @@ exit ≠ 0. `-v` adds per-rule argv + errno context.
   (cache/tmp/downloads/config fixtures), sets `SWEEP_HOME`, and **asserts
   `Ctx::home != real $HOME`** (env var `SWEEP_TEST_GUARD=1` set by harness; main
   aborts if guard present and target is real home).
-- **Rule tests:** for each rule — detect on/off scenarios, scan counts/bytes exact,
+- **Rule tests:** for each rule: detect on/off scenarios, scan counts/bytes exact,
   age gates (seeded mtimes via `filetime`), clean result + survivors.
 - **Gate tests:** PURGE wrong text → GateError(2); `--yes` does not bypass
   destructive; `--i-know-what-im-doing` does (documented behavior locked by test).
 - **Golden tests (`insta`):** `scan` table (wide/narrow/no-unicode/no-color),
-  `doctor`, `rules list`, dry-run previews — docs/copy drift caught in CI.
+  `doctor`, `rules list`, dry-run previews; docs/copy drift caught in CI.
 - **Command tests (`assert_cmd`):** exit codes 0/1/2/3 paths, JSON validity +
   schema-required keys, lock contention.
 - **Never in tests/CI:** real sudo, real `$HOME` mutation, network (enforced by

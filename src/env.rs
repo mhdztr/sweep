@@ -1,7 +1,7 @@
 //! Environment resolution: home override + test-guard refusal logic.
 //!
 //! Every `$HOME`-relative path in the codebase must resolve through
-//! [`resolve_home`] (fed into `Ctx::home`) — this is what makes rule tests
+//! [`resolve_home`] (fed into `Ctx::home`), this is what makes rule tests
 //! runnable against sandboxed temp homes and what makes them unable to touch
 //! the real home by accident.
 
@@ -27,8 +27,8 @@ pub enum EnvError {
 
 /// Resolve the home directory sweep operates on.
 ///
-/// * `SWEEP_HOME` — test/container override; all rule paths derive from it.
-/// * `SWEEP_TEST_GUARD` — when set (by the test harness), refuse to resolve to
+/// * `SWEEP_HOME`, test/container override; all rule paths derive from it.
+/// * `SWEEP_TEST_GUARD`, when set (by the test harness), refuse to resolve to
 ///   the real home directory under any circumstance.
 pub fn resolve_home() -> Result<PathBuf, EnvError> {
     let real = real_home();

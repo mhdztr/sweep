@@ -1,4 +1,4 @@
-//! Rule-level scan tests (plan §4 `tests/scan_rules.rs`) — exact numbers from
+//! Rule-level scan tests (plan §4 `tests/scan_rules.rs`), exact numbers from
 //! the canonical fixture table. `Ctx::for_test` homes only; no process env.
 
 mod common;
@@ -138,7 +138,7 @@ fn tmp_special_files_contribute_zero_bytes_and_files() {
     let home = tmp.path();
     let root = home.join(".fake-tmp");
     std::fs::create_dir_all(&root).expect("mkdir");
-    // ORDINARY names — only the special-kind check protects them.
+    // ORDINARY names, only the special-kind check protects them.
     let _sock = std::os::unix::net::UnixListener::bind(root.join("plain.sock")).expect("socket");
     mkfifo(&root.join("plain.fifo"));
 
@@ -211,7 +211,7 @@ fn trash_counts_files_and_info_dirs_only() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let home = tmp.path();
     scan_fixture(home);
-    // Sibling of Trash/ — outside both roots, contributes nothing.
+    // Sibling of Trash/, outside both roots, contributes nothing.
     seed(
         home,
         ".local/share/not-trash/sibling.bin",
@@ -261,7 +261,7 @@ fn user_cache_subtracts_thumbnails_no_double_count() {
     let uc = get("user-cache");
     assert_eq!(
         uc.info.bytes, 10_024,
-        "15 144 gross minus thumbnails 5 120 — counted exactly once"
+        "15 144 gross minus thumbnails 5 120: counted exactly once"
     );
     assert_eq!(uc.info.files, 2, "4 − 2");
     assert_eq!(uc.info.dirs, 2, "3 − 1");
@@ -302,7 +302,7 @@ fn detect_not_applicable_missing_root() {
 fn detect_disabled_in_config() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let home = tmp.path();
-    scan_fixture(home); // .cache exists — disabled wins over found
+    scan_fixture(home); // .cache exists, disabled wins over found
     let mut ctx = ctx_for(home);
     ctx.config.rules.user_cache.enabled = false;
 
@@ -326,7 +326,7 @@ fn detect_disabled_in_config() {
 fn thumbnails_detect_reason_names_the_thumbnails_dir() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let home = tmp.path();
-    // `~/.cache` EXISTS but the rule's ROOT `~/.cache/thumbnails` does not —
+    // `~/.cache` EXISTS but the rule's ROOT `~/.cache/thumbnails` does not;
     // the reason must name the missing root, not its present parent (critic
     // finding: "~/.cache not found" was factually wrong here).
     std::fs::create_dir_all(home.join(".cache")).expect("mkdir .cache");
@@ -354,7 +354,7 @@ fn tmp_location_is_the_primary_root_through_display_path() {
     let ctx = ctx_for(tmp.path());
 
     // Plan §2.10 "location `/tmp`" + Rule trait "display_path": ONE primary
-    // root, rendered relative to home in a sandbox — never the joined
+    // root, rendered relative to home in a sandbox, never the joined
     // non-spec "~/.fake-tmp, ~/.fake-var-tmp" string the goldens used to
     // pin (critic blocker 1). On a real host the same call yields "/tmp".
     assert_eq!(TmpRule.location(&ctx), "~/.fake-tmp");
