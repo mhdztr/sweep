@@ -1,7 +1,13 @@
 # sweep — CLI & Terminal UX (the *interface*)
 
 Complete command reference, prompt copy catalog, mock outputs, exit codes, env vars,
-tokens. Every string here is what ships (golden snapshots enforce it).
+tokens. Every string here is what ships (golden snapshots enforce it); the glyph
+note below is the one scheduled exception.
+
+> **Glyph note (D13):** examples below show the M1 emoji tier/state glyphs.
+> Rendered output is ASCII only from M2: `+` safe, `!` caution, `#` destructive,
+> `~` report-only, `[x]/[ ]` checkboxes, `lock`/`sudo`/`warn` labels. Goldens are
+> re-recorded in the same commit.
 
 ---
 

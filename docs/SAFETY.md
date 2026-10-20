@@ -5,6 +5,9 @@ and the tier of what's about to go — and every destructive path is abortable.*
 
 This document is normative: if code contradicts it, code is wrong.
 
+> **Glyph note (D13):** tables/examples below show the M1 emoji shorthand.
+> Rendered output is ASCII only from M2 (`+`/`!`/`#`/`~`; `lock`/`sudo`/`warn`).
+
 ---
 
 ## 1. Threat model — what we defend against

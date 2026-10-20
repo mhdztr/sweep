@@ -5,7 +5,7 @@ before the next begins. Status: `[ ] not started · [~] in progress · [x] done`
 
 **Global Definition of Done (applies to every milestone):**
 - `cargo fmt --check` + `clippy -D warnings` + `cargo test` green in CI.
-- Docs in sync (RULES-CATALOG / CLI-UX / SAFETY match code; golden snapshots updated deliberately).
+- Docs in sync (RULES-CATALOG / CLI-UX / SAFETY / CI-CD match code and workflows; golden snapshots updated deliberately).
 - No new safety invariant weakened without a `CONTEXT.md` §7 revision entry.
 - README/ROADMAP status updated in the same change.
 
@@ -66,11 +66,58 @@ Tasks:
 - [x] Golden snapshots pass; sandbox manifest proves zero mutations.
 - [x] All 4 rules have exact byte/count tests.
 
-## M2 — Interactive clean + full safe tier
-**Goal:** the daily-driver loop works end-to-end for all 11 safe rules.
-**Depends on:** M1.
+## M1.5 — Repo hardening + CI/CD foundation (infra only)
+
+**Goal:** make every future push verified beyond fmt/clippy/test, and scaffold a
+repeatable release path — **without changing `sweep` behavior**.
+**Depends on:** M1. **Detail:** `docs/CI-CD.md` (plan of record).
 
 Tasks:
+- [ ] Restructure `ci.yml`: split jobs (fmt / clippy / test / doctest / docs /
+      release-build), `--locked` on every dependency-resolving command,
+      concurrency, timeouts, least-privilege permissions; remove the redundant
+      "Docs sync" step (the real catalog gate lands at M3).
+- [ ] `deny.toml` + `security.yml`: `cargo-deny` (advisories, licenses, bans,
+      sources), `cargo-machete` (milestone-commented ignores), `actionlint`,
+      `typos`; PR `dependency-review`.
+- [ ] `scheduled.yml`: weekly CodeQL (Rust), OpenSSF Scorecard, and a
+      beta-toolchain build (non-blocking); advisories run weekly in
+      `security.yml`.
+- [ ] Dependabot (cargo + actions, grouped, weekly).
+- [ ] Repo settings: secret scanning + push protection, private vulnerability
+      reporting, branch protection (required: fmt, clippy, test, doctest, docs,
+      release-build, deny), `v*` tag protection.
+- [ ] `SECURITY.md`, `CHANGELOG.md`; `Cargo.toml` metadata (`repository`,
+      `homepage`, `rust-version` discovered with `cargo msrv`).
+- [ ] `release.yml` scaffold: tag `v*` + `workflow_dispatch` dry run; build
+      matrix (x86_64 gnu + static musl, aarch64 gnu); archives, `.sha256`, SBOM,
+      SLSA provenance — publishes nothing without a tag.
+- [ ] `packaging/` layout + `packaging.yml` skeleton (actionlint + shellcheck;
+      the PKGBUILD job is skipped until M7 files exist — nothing to validate
+      before release artifacts do).
+- [x] Point `AGENTS.md`, `CONTEXT.md`, `docs/MASTER-PLAN.md`, and
+      `docs/ARCHITECTURE.md` at `docs/CI-CD.md`.
+
+**Acceptance gate:**
+- [ ] New workflows pass on a PR; `actionlint` clean.
+- [ ] `cargo deny check` green with a reviewed allowlist (every ignore dated and
+      justified); `cargo machete` green with milestone comments.
+- [ ] `cargo test --doc` and `cargo build --release --locked` run in CI.
+- [ ] `release.yml` dry run produces archives + checksums + SBOM + attestation
+      and publishes nothing.
+- [ ] `packaging.yml` dispatch run is green and skips cleanly when no PKGBUILDs
+      exist (the AUR job activates at M7).
+- [ ] Branch and tag protection active; Dependabot opens its first grouped PR.
+
+## M2 — Interactive clean + full safe tier
+**Goal:** the daily-driver loop works end-to-end for all 11 safe rules.
+**Depends on:** M1.5.
+
+Tasks:
+- [ ] UI glyph cleanup: no emoji in any output — tier glyphs are ASCII
+      `+ ! #` unconditionally; width math + golden snapshots updated; README
+      tier bullets plus CLI-UX/RULES-CATALOG/SAFETY examples updated in the
+      same commit (decision D13).
 - [ ] `ui/checklist.rs`: inquire MultiSelect + custom renderer, keybindings
       (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled)
 - [ ] Presets: safe/regular/full selection logic (full still gates destructive at M4 —
@@ -189,29 +236,42 @@ Tasks:
 - [ ] `sweep completion bash|zsh|fish` generation + packaged; man page (clap_mangen)
 - [ ] `dist/sweep.service` + `sweep.timer` (report-only default: `sweep scan --json`
       → journal; auto-clean documented as explicit override), timer **disabled** in pkg
-- [ ] `PKGBUILD`: `sweep-bin` (prebuilt, sha256) + `sweep` (source); completions+man+units
-      in package() (split docs package optional)
-- [ ] Release CI: tag → build (x86_64 gnu + musl static) + checksums + notes
+- [ ] `packaging/aur/sweep-bin` + `packaging/aur/sweep` (PKGBUILD + `.SRCINFO`);
+      completions, man page, and systemd units installed from `package()`
+      (split docs package optional). Spec: `docs/CI-CD.md` §7.1.
+- [ ] `release.yml` final: tag → x86_64 gnu + static musl (+ aarch64 gnu),
+      `cargo auditable`, SBOM (CycloneDX), SLSA provenance, `.sha256`, draft
+      release with notes from `CHANGELOG.md` (`docs/CI-CD.md` §6).
+- [ ] Verify release artifacts: `sha256sum -c`, `gh attestation verify`,
+      `cargo audit bin` on the shipped binaries.
 - [ ] README final: install (AUR/manual), quickstart, presets, safety section
       (link SAFETY.md), rule table (generated), FAQ (Downloads? timer? sudo? trash?)
 - [ ] Manual test matrix: Arch (btrfs+snapper), Arch (ext4), Ubuntu LTS, Fedora —
       checklist recorded in release notes
 - [ ] Tag `v0.1.0`
 
+**Explicitly out of scope:** Flatpak packaging (D11 — sandbox has a private
+`/tmp`, no sudo, no pacman/systemd; revisit only post-1.0 with a home-only
+scope). Do not add Flatpak packaging or CI.
+
 **Acceptance gate (release):**
-- Fresh Arch VM: AUR install → `sweep doctor` clean → `sweep clean` end-to-end
-  without config → frees space → history entry exists → `man sweep` renders →
-  completions tab-work → timer enable → journal report appears.
+- Fresh Arch VM: AUR install (`sweep-bin`) → `sweep doctor` clean → `sweep clean`
+  end-to-end without config → frees space → history entry exists → `man sweep`
+  renders → completions tab-work → timer enable → journal report appears.
+- Source package `sweep` builds and tests in a clean chroot.
+- Release artifacts verify on a clean machine: `sha256sum -c`,
+  `gh attestation verify`, `cargo audit bin`.
 - All golden snapshots match docs; exit codes exercised in CI.
 
 ---
 
 ## Dependency graph
 ```
-M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7
-        (safe rules)  (caution) (destructive) (sudo/distro) (ext/top) (ship)
+M0 → M1 → M1.5 → M2 → M3 → M4 → M5 → M6 → M7
+          (infra)  (safe) (caution) (destructive) (sudo/distro) (ext/top) (ship)
 ```
-No parallelization planned (single dev, sequential keeps safety invariants coherent).
+No parallelization planned (single dev, sequential keeps safety invariants
+coherent). M1.5 is infrastructure-only and must not touch `sweep` behavior.
 
 ## Risk register
 
@@ -224,10 +284,16 @@ No parallelization planned (single dev, sequential keeps safety invariants coher
 | docs drift | trust loss | CI snapshot `rules list` vs docs table |
 | jwalk/mount-boundary edge cases | wrong deletions | walker tests + execution-time prefix re-check (defense in depth) |
 | AUR package maintenance | adoption | `-bin` first, source pkg optional |
+| Flatpak sandbox conflict | shipping a lesser product under the same name | D11: not packaged before 1.0; revisit only with a home-only scope |
+| Security-check noise (licenses, duplicates) | red CI ignored | reviewed `deny.toml` allowlist; duplicates warn first; advisories on a schedule |
+| Release automation failure | bad artifacts in the wild | dry run before every tag; draft releases; reviewer environment; never reuse a tag |
+| CI cannot test Arch/sudo | false confidence | documented out-of-scope list (`docs/CI-CD.md` §11); M7 manual VM matrix is the gate |
 
 ## Parking lot (explicitly deferred past 0.1)
 
 Fullscreen ncdu-style browser · `/` filter in checklist · plugin binaries/WASM ·
 i18n · Nix flake / Homebrew · `sweep watch` · apt `autoremove`-equivalent orphan
 rule · persistent size cache between runs · `--json` streaming events · shell
-prompt segment helper.
+prompt segment helper · **Flatpak packaging** (D11: sandbox has a private `/tmp`,
+no sudo, no pacman/systemd — revisit post-1.0 only) · crates.io publishing ·
+`.deb`/`.rpm` via `nfpm`.

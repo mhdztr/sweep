@@ -17,7 +17,7 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 Six wiki pages (`paccache`, `journalctl --vacuum`, `docker system df`, AUR cache
 locations, orphan removal, browser caches) collapse into one checklist with:
 
-- **Tiers of danger** — 🟩 safe defaults · 🟨 opt-in cautions · 🟥 gated destruction
+- **Tiers of danger** — safe defaults · opt-in cautions · gated destruction
 - **Nothing blind** — scan first, sizes + counts + newest-file age before any delete
 - **Honest skips** — running Firefox, live sockets, open files: reported, never silently touched
 - **Scriptable** — `--json`, stable exit codes, `--dry-run`, presets for automation
@@ -58,11 +58,16 @@ Full model: [docs/SAFETY.md](docs/SAFETY.md).
 ## Install (once v0.1 ships)
 
 ```sh
-# Arch (AUR)
-yay -S sweep-bin
-# or from source
+# Arch (AUR) — planned at M7
+yay -S sweep-bin        # prebuilt static binary
+yay -S sweep            # source build
+# or from a checkout
 cargo install --path .
 ```
+
+> Flatpak is **not** planned: the sandbox has a private `/tmp`, no sudo, and no
+> pacman/systemd, so a storage cleaner cannot do its job correctly inside it.
+> The decision and its rationale are in [docs/CI-CD.md](docs/CI-CD.md) §7.3.
 
 ## Documentation
 
@@ -75,6 +80,7 @@ cargo install --path .
 | [docs/RULES-CATALOG.md](docs/RULES-CATALOG.md) | all 26 rules, spec of record |
 | [docs/CLI-UX.md](docs/CLI-UX.md) | commands, prompts, exit codes |
 | [docs/SAFETY.md](docs/SAFETY.md) | threat model, gates, sudo protocol |
+| [docs/CI-CD.md](docs/CI-CD.md) | CI, security scanning, releases, AUR packaging |
 
 ## License
 

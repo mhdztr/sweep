@@ -47,26 +47,29 @@ destroys everything, including the entirety of `~/Downloads`.
 ## 4. Core concepts
 
 ### 4.1 Rule
-Everything cleanable is a `Rule` — an id, title, tier, icon, and detect/scan/clean
+Everything cleanable is a `Rule` — an id, title, tier, glyph, and detect/scan/clean
 functions plus sudo/guard metadata. The registry is filtered by `detect()` against
 the environment, which is how "works everywhere, deepest on Arch" falls out of the
 design instead of being special-cased. Full specs: `RULES-CATALOG.md`.
 
 ### 4.2 Tiers of danger
-- 🟩 **safe** — default-checked in `regular` preset. One shared end-of-selection
+- `+` **safe** — default-checked in `regular` preset. One shared end-of-selection
   confirmation (default = cancel).
-- 🟨 **caution** — visible, default-*unchecked*. Per-rule confirmation showing
+- `!` **caution** — visible, default-*unchecked*. Per-rule confirmation showing
   count/samples first (orphans/docker/flatpak show their actual item lists).
-- 🟥 **destructive** — only selectable under the `full` preset; each requires a
+- `#` **destructive** — only selectable under the `full` preset; each requires a
   **typed `PURGE`** after a summary screen. `--yes` does not bypass (D7).
-- 📋 **report-only** — snapper snapshots: measured and reported, never touched (D9).
+- `~` **report-only** — snapper snapshots: measured and reported, never touched (D9).
+
+All TUI glyphs are ASCII (D13, landing in M2); no emoji anywhere in rendered
+output.
 
 ### 4.3 Presets
 | Preset | Checked by default | Purpose |
 |---|---|---|
-| `safe` | all 🟩 | nervous first run / automated timer runs |
-| `regular` (default) | all 🟩 + user's `[presets.regular].include` | the weekly clean |
-| `full` | all 🟩 + 🟨 + 🟥 unlocked | deep clean before reinstall / sale / disk surgery |
+| `safe` | all `+` | nervous first run / automated timer runs |
+| `regular` (default) | all `+` + user's `[presets.regular].include` | the weekly clean |
+| `full` | all `+` + `!` + `#` unlocked | deep clean before reinstall / sale / disk surgery |
 
 ### 4.4 Two-pass execution (D8)
 User-level rules run first, unprivileged, to completion; all selected system rules
@@ -98,7 +101,7 @@ never corrupts the user-level result.
 | F14 | systemd service+timer units (report-only default, disabled) | M7 |
 | F15 | Snapper/btrfs space report | M5 |
 | F16 | Shell completions + man page | M7 |
-| F17 | AUR PKGBUILD + release artifacts (gnu + musl) | M7 |
+| F17 | AUR packages (`sweep-bin`, `sweep`) + verifiable release artifacts (gnu + static musl, SBOM, provenance) | M7 |
 
 ### Could (explicitly parked — see ROADMAP bottom)
 Fullscreen ncdu-style browser, plugin binaries/WASM, i18n, Nix/Homebrew, `watch` mode.
@@ -155,7 +158,7 @@ cleans.
 ## 8. Quality attributes
 
 1. **Safety** > completeness > UX polish > speed. When in conflict, safety wins.
-2. **Legibility:** every dangerous row carries icon + color + text label (`danger 🔒`), never color alone; `NO_COLOR`/`--no-unicode` keep it usable.
+2. **Legibility:** every dangerous row carries a text label (`destructive`, `locked`, `sudo`) plus color, never color alone; `NO_COLOR`/`--no-unicode` keep it usable.
 3. **Predictability:** flags > env > config > defaults precedence; identical inputs → identical plan.
 4. **Honesty:** sizes are "reclaimable now", skipped items always explained, freed counts come from actual deletion results, not estimates.
 5. **Composability:** JSON everywhere, exit codes stable, no interactive prompt when `--yes` or non-tty (fail with guidance instead).
@@ -165,6 +168,8 @@ cleans.
 - Correctness: 0 known paths to silent deletion outside gates; all 26 rules have a sandbox test.
 - UX: cold start `sweep scan` <5 s typical SSD; total output of `clean` flow fits 2 screens + prompts.
 - Coverage: catalog matches `rules list` output 100% (CI-verified via snapshot).
+- Supply chain: `cargo deny` green with no unexplained ignores; every release
+  ships checksums, an SBOM, and a provenance attestation that verifies.
 - Portability: passes on Arch, Ubuntu LTS, Fedora current (manual matrix in M7).
 
 ## 10. Release strategy
@@ -178,12 +183,21 @@ cleans.
 **Compatibility promise from 1.0:** rule ids, config keys, JSON fields only *add*;
 breaking changes bump schema `version` and are listed in docs/JSON-SCHEMAS.md.
 
+**Distribution (D11):** AUR is the primary channel — `sweep-bin` (static musl
+release asset) first, then a source `sweep` package. GitHub Releases carry gnu
+and musl binaries with `.sha256`, a CycloneDX SBOM, and SLSA build provenance.
+Flatpak is **not** packaged before 1.0: the sandbox has a private `/tmp`, no
+sudo, and no pacman/systemd, so a home-only build would be a lesser product
+under the same name. crates.io is deferred. Full design, security checks, and
+the release runbook live in `docs/CI-CD.md`.
+
 ## 11. Phases overview
 
 | Phase | Name | Outcome |
 |---|---|---|
 | M0 | Scaffold + context docs | repo at `~/Projects/sweep`, all MDs, CI green |
 | M1 | Scan engine | `sweep scan` parallel walk + pretty table + JSON |
+| **M1.5** | Repo hardening | five-workflow CI/CD, security scans, release scaffold, packaging skeleton |
 | M2 | Interactive clean | checklist, presets, 11 safe rules, progress, summary |
 | M3 | Caution library | 10 caution rules, guards, list-first confirms, dry-run |
 | M4 | Destructive tier | PURGE gate, Downloads, deep wipe, trash, logs, history |

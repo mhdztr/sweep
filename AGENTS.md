@@ -22,7 +22,8 @@ cargo run -- scan              # read-only scan
 cargo test --test cli_smoke    # CLI surface tests only
 ```
 
-Release: `cargo build --release` (lto=thin, strip=true in profile).
+Release: `cargo build --release` (lto=thin, strip=true in profile). The
+tag-driven release + AUR pipelines are planned in `docs/CI-CD.md` (M1.5/M7).
 
 ## Repo layout
 
@@ -32,7 +33,8 @@ Release: `cargo build --release` (lto=thin, strip=true in profile).
 - `src/env.rs` — home resolution + `SWEEP_TEST_GUARD` refusal
 - future modules per `docs/ARCHITECTURE.md` §1: `rules/`, `scan/`, `exec/`,
   `ui/`, `system/`, `config.rs`, `state.rs`, `report.rs`
-- `docs/` — **spec of record** (see sync rule below)
+- `docs/` — **spec of record** (see sync rule below); CI/CD + release + AUR
+  plan: `docs/CI-CD.md`
 - `ROADMAP.md` — milestone status (live), `CONTEXT.md` — decisions + conventions
 
 ## Safety invariants (violating these = P0)
@@ -51,14 +53,17 @@ Release: `cargo build --release` (lto=thin, strip=true in profile).
 ## Docs-sync rule
 
 A change to a rule or CLI behavior **must** update `docs/RULES-CATALOG.md` /
-`docs/CLI-UX.md` in the same commit. `sweep rules list` output is snapshot-tested
-against the catalog. Golden snapshots (`insta`) are re-recorded deliberately
-(`cargo insta review`), never blindly accepted.
+`docs/CLI-UX.md` in the same commit; a workflow or packaging change **must**
+update `docs/CI-CD.md`. `sweep rules list` output is snapshot-tested against the
+catalog. Golden snapshots (`insta`) are re-recorded deliberately
+(`cargo insta review`), never blindly accepted. UI output must contain no emoji
+(decision D13); the existing M1 tier glyphs are replaced by ASCII `+ ! #` in M2.
 
 ## Current milestone
 
-See the first unchecked milestone in `ROADMAP.md` (M0 = scaffold + docs; work
-ticks happen there). Definition of Done for every milestone is at the top of that file.
+See the first unchecked milestone in `ROADMAP.md`; work ticks happen there.
+M1.5 is infrastructure-only and must not change `sweep` behavior. Definition of
+Done for every milestone is at the top of that file.
 
 ## Test conventions
 

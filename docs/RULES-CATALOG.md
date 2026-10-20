@@ -4,9 +4,12 @@
 must always match it (CI snapshot enforces). Code changes without a same-commit
 update here are bugs.
 
-**Tiers:** 🟩 `safe` (checked in `safe`+`regular` presets) · 🟨 `caution` (visible,
-unchecked) · 🟥 `destructive` (`full` preset only, typed `PURGE`) · 📋 report-only
-(no clean action ever).
+**Tiers:** `+` `safe` (checked in `safe`+`regular` presets) · `!` `caution`
+(visible, unchecked) · `#` `destructive` (`full` preset only, typed `PURGE`) · `~`
+report-only (no clean action ever).
+
+> **Glyph note (D13):** tables below still use the M1 emoji shorthand for tier and
+> sudo markers. Rendered output is ASCII only from M2, as above.
 
 **Field meanings:**
 - **Targets** — exact paths/globs (Arch; `detect()` substitutes elsewhere).

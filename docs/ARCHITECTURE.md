@@ -89,11 +89,14 @@ a `sweep-lib` ever becomes useful). Edition: latest stable Rust. MSRV: stable �
 │   ├── rules/*.rs           # one file per rule family
 │   ├── gate_tests.rs        # PURGE flow, --yes boundaries, dry-run zero-touch
 │   └── golden/*.snap        # insta snapshots: scan table, doctor, rules list
-├── docs/                    # spec-of-record copies (see CONTEXT §4)
-├── completions/             # bash zsh fish (clap_complete, generated in build.rs or CI)
-├── dist/sweep.service       # Type=oneshot, report-only default
-├── dist/sweep.timer         # OnCalendar=weekly, Persistent=true, disabled in pkg
-├── PKGBUILD                 # AUR: sweep-bin (prebuilt) + sweep (source)
+├── docs/                    # spec-of-record copies (see CONTEXT §5)
+├── completions/             # planned (M7): bash/zsh/fish (clap_complete)
+├── dist/sweep.service       # planned (M7): Type=oneshot, report-only default
+├── dist/sweep.timer         # planned (M7): OnCalendar=weekly, disabled in pkg
+├── packaging/
+│   ├── aur/sweep-bin/       # planned: PKGBUILD + .SRCINFO (prebuilt release asset)
+│   └── aur/sweep/           # planned: PKGBUILD + .SRCINFO (source build)
+├── .github/workflows/       # ci.yml today; security/release/packaging/scheduled planned
 ├── AGENTS.md · CONTEXT.md · ROADMAP.md · README.md · LICENSE (MIT)
 ```
 
@@ -303,15 +306,17 @@ walk(root):
   `TERM != dumb` ∧ (tty or `--color always`).
 - **Width handling:** `terminal_size()`; ≥100 cols → full table; 60–99 → drop
   `files` column + shorten paths with `~/…/tail`; <60 → compact list rows
-  (two-line per rule). `--no-unicode` swaps `╭╮│✔🔒⚠` → ASCII.
+  (two-line per rule). `--no-unicode` swaps box drawing to ASCII; tier and state
+  glyphs are ASCII in every mode (D13, landing in M2).
 - **Checklist:** `inquire::MultiSelect` with custom renderer; prompt text = header
   box; render loop re-renders live totals on every toggle. Keys: `space` toggle,
   `↑/↓` (also `Ctrl-P/N`), `a` all safe, `n` none, `i` invert, `p` preset cycle,
   `/` filter (v0.2 candidate), `enter` confirm, `esc`/`q`/`Ctrl-C` abort.
-- **Row states:** `✔/·`, tier glyph, title, guard note, sudo 🔓, lock 🔒, right-
-  aligned human size. Guarded rows show `⚠ reason` and are *refused* at confirm if
-  checked (msg: "browser running — re-run after closing, or use --force-guards"
-  *(flag intentionally deferred to Could)*).
+- **Row states:** `[x]/[ ]`, tier glyph (`+`/`!`/`#`), title, guard note,
+  `sudo`/`lock` labels, right-aligned human size. Guarded rows show
+  `[!] reason` and are *refused* at confirm if checked (msg: "browser running —
+  re-run after closing, or use --force-guards" *(flag intentionally deferred to
+  Could)*).
 - **Progress:** scan = single spinner + "n/m rules" + elapsed; clean = per-rule
   `indicatif::MultiProgress` bar (bytes where measurable, else file-count ticks).
 
@@ -509,8 +514,9 @@ exit ≠ 0. `-v` adds per-rule argv + errno context.
   `doctor`, `rules list`, dry-run previews — docs/copy drift caught in CI.
 - **Command tests (`assert_cmd`):** exit codes 0/1/2/3 paths, JSON validity +
   schema-required keys, lock contention.
-- **Never in CI:** real sudo, real $HOME mutation, network (enforced by no-network
-  code policy + no test needs it).
+- **Never in tests/CI:** real sudo, real `$HOME` mutation, network (enforced by
+  the no-network code policy + no test needs it). Release and packaging jobs may
+  fetch crates/tooling; the binary itself never performs network I/O.
 
 ## 17. Portability notes (Linux-only, per requirement)
 
@@ -519,3 +525,13 @@ exit ≠ 0. `-v` adds per-rule argv + errno context.
 - Root fs differences (btrfs ext4 xfs zfs) handled via `statvfs` + mount table only.
 - Containers: `doctor` warns when running without `/proc` visibility or read-only
   `/tmp` (rules degrade to NotApplicable with reasons).
+
+## 18. CI/CD, release, and distribution
+
+Plan of record: `docs/CI-CD.md`. Summary: five workflows (`ci`, `security`,
+`release`, `packaging`, `scheduled`); `cargo-deny` gates advisories, licenses,
+bans, and sources; PR checks also run doctests, `cargo doc`, and a release build;
+releases are tag-driven (`v*`) and ship `.sha256`, a CycloneDX SBOM, and SLSA
+provenance. AUR is the primary channel (`sweep-bin` first, then a source
+package); Flatpak is deferred (D11) because the sandbox has a private `/tmp` and
+no sudo. `sweep` itself performs no network I/O.

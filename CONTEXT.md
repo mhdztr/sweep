@@ -16,7 +16,8 @@ Seeded from the plan doc `sweep-CONTEXT.md`; this is the live repo copy.
 - **Docs in this repo:** `README.md` (pitch) · `AGENTS.md` (agent entry) ·
   `ROADMAP.md` (live status) · this file · `docs/MASTER-PLAN.md` ·
   `docs/ARCHITECTURE.md` · `docs/RULES-CATALOG.md` · `docs/CLI-UX.md` ·
-  `docs/SAFETY.md` · `docs/CONFIG.md` · `docs/JSON-SCHEMAS.md`.
+  `docs/SAFETY.md` · `docs/CONFIG.md` · `docs/JSON-SCHEMAS.md` ·
+  `docs/CI-CD.md` (CI/CD, security scanning, release, AUR packaging).
 
 ## 2. Decision records (ADR-lite, normative)
 
@@ -60,6 +61,38 @@ pkexec fallback; decline reported, not fatal.
 **D10 — Timer default = report-only scan.** Auto-clean requires explicit unit
 override, documented, never packaged as default.
 
+**D11 — Distribution: AUR primary; Flatpak deferred.**
+*Context:* Arch-first audience; Flathub would add reach but imposes a sandbox.
+*Decision:* ship `sweep-bin` (static musl release asset) first, then `sweep`
+(source PKGBUILD). GitHub releases carry gnu + musl binaries, checksums, SBOM,
+and SLSA provenance. **Flatpak is not packaged before 1.0.**
+*Rejected:* Flatpak for 0.1 (private `/tmp`, no sudo, no pacman/systemd, broad
+home permission, and the `org.freedesktop.Flatpak` host-command escape hatch is
+against the safety posture); crates.io as a distribution channel.
+*Consequences:* distribution stays native; Flatpak stays in the parking lot and
+is revisited post-1.0 only with a home-only scope if demand appears.
+
+**D12 — CI/CD: security-gated, tag-driven releases.**
+*Context:* the repo started with one fmt/clippy/test job.
+*Decision:* five workflows (`ci`, `security`, `release`, `packaging`,
+`scheduled`); `cargo-deny` is the vulnerability gate (advisories + licenses +
+bans + sources); PRs require fmt/clippy/test/doctest/docs/release-build/deny;
+releases build only on `v*` tags via a dry-runnable `release.yml` with SBOM +
+provenance; no secrets in build jobs. Detail: `docs/CI-CD.md`.
+*Rejected:* `cargo-audit` alone (advisories only), release-on-every-push,
+publishing from `main` without tags.
+*Consequences:* required checks mean a PR-based flow; the PR gate stays under
+~5 minutes and slow checks move to `scheduled.yml`.
+
+**D13 — No emoji in UI output.**
+*Context:* explicit user requirement; emoji break alignment and terminal
+portability.
+*Decision:* tier glyphs are ASCII `+ ! #` in every mode; no emoji anywhere in
+TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII.
+*Consequences:* width math + the five golden snapshots change; the UI specs'
+examples keep the M1 glyphs until M2 updates them in the same commit as the
+code; lands as the first M2 task (ROADMAP).
+
 ## 3. Conventions
 
 ### Code
@@ -72,6 +105,9 @@ override, documented, never packaged as default.
 - Rule ids/config keys/JSON fields are **stable API**: rename = breaking = revision log entry.
 - Rule module ↔ doc pairing: `rules/foo.rs` changes require `docs/RULES-CATALOG.md`
   update in the same commit.
+- Workflow/packaging changes require `docs/CI-CD.md` update in the same commit.
+- UI output must contain no emoji (D13); M1's emoji tier glyphs are replaced by
+  ASCII `+ ! #` in M2.
 
 ### Naming
 - Code/config/JSON: kebab-case ids (`pacman-cache`). UI prose: "category"; docs/code: "rule".
@@ -91,15 +127,16 @@ override, documented, never packaged as default.
 
 ## 4. Environment facts
 
-- Host: Linux, workspace `~/`; not a git repo at workspace root (repo lives at
-  `~/Projects/sweep` once created).
-- Plan mode currently restricts writes to `/home/pinefeast/.opencode/plan`
-  (note: `write` tool guard was buggy on 2026-10-19 — shell heredoc worked; retry
-  `write` at M0, fall back to shell if still broken).
+- Host: Linux. Repo: `~/Projects/sweep` (git, public GitHub); the workspace root
+  `~/` is not a git repo.
+- Session plan docs live in `/home/pinefeast/.opencode/plan`; project plans and
+  specs live in the repo (`docs/`, `ROADMAP.md`, `CONTEXT.md`).
 - Target test OS for acceptance: Arch-based; secondary manual matrix Ubuntu LTS + Fedora.
-- No network dependency anywhere; CI = fmt/clippy/test only.
+- No network dependency at runtime. CI today = one fmt/clippy/test job; the full
+  plan (security scans, tag-gated release, AUR validation) is `docs/CI-CD.md`,
+  tracked as ROADMAP M1.5 (foundation) and M7 (ship).
 
-## 5. Repo docs list (create at M0 — per-file content spec)
+## 5. Repo docs list (M0 baseline + M1.5 additions — per-file content spec)
 
 | File | Content |
 |---|---|
@@ -114,6 +151,7 @@ override, documented, never packaged as default.
 | `docs/SAFETY.md` | from plan — threat model, gates, never-touch, sudo protocol, checklist |
 | `docs/CONFIG.md` | ARCHITECTURE §9 expanded with examples per rule + custom-rule recipe |
 | `docs/JSON-SCHEMAS.md` | v1 schemas for scan/clean/top/history + versioning changelog |
+| `docs/CI-CD.md` | CI workflows, security scans + `deny.toml` policy, release matrix/SBOM/provenance, AUR packaging, Flatpak deferral, release runbook |
 
 ## 6. Resume playbooks
 
@@ -131,9 +169,13 @@ state needed (no scratch files; PR/commit messages carry context).
 doc-conforming?) → `docs/SAFETY.md` (if deletion-related: treat as P0, apply PR
 safety checklist) → fix with tests + doc updates.
 
-**Playbook D — plan questions:** decisions are in §2 (D1–D10). If a question isn't
-covered: add a new record here (D11+) with context/decision/rejection — never
+**Playbook D — plan questions:** decisions are in §2 (D1–D13). If a question isn't
+covered: add a new record here (D14+) with context/decision/rejection — never
 silently diverge from a documented decision.
+
+**Playbook E — release:** follow `docs/CI-CD.md` §6.5. Tag only after the M7
+acceptance gate; verify checksums + provenance before publishing; update AUR
+`sweep-bin` first, then `sweep`.
 
 ## 7. Revision log (plan & decisions over time)
 
@@ -143,6 +185,7 @@ silently diverge from a documented decision.
 | 2026-10-19 | R2 | Extensification pass: all 7 docs expanded to full spec depth (threat model, 26-rule catalog, prompt copy catalog, ADRs, M0–M7 tasks+gates) |
 | 2026-10-19 | R3 | M0 built: repo scaffolded at `~/Projects/sweep` (edition 2024, clap surface complete, `SWEEP_TEST_GUARD` sandbox harness, 14 tests green); docs copied/adapted; history-record schema restored into `docs/ARCHITECTURE.md` §11 |
 | 2026-10-19 | R4 | M1 scan engine: jwalk 0.8 walker pruning subtrees via process_read_dir children.retain (verified from source); scan is lock-free — flock scope = mutating commands only (ARCHITECTURE §4, SAFETY §10); hand-rolled ANSI/emoji-aware table renderer (+unicode-width 0.2) instead of comfy-table presets; "newest" = newest counted entry (age-gated files excluded from every count) |
+| 2026-10-19 | R5 | Repo hardening + distribution planned (`docs/CI-CD.md`): five-workflow CI/CD design; `cargo-deny` as the vulnerability gate; tag-gated release with SBOM + SLSA provenance; AUR `sweep-bin` then source `sweep`; Flatpak deferred (D11); no-emoji UI rule (D13). ROADMAP gains M1.5 (infra, before M2) and expanded M7 release tasks |
 
 ## 8. Open questions
 
@@ -150,3 +193,4 @@ silently diverge from a documented decision.
 - Parking lot + risk register live in `ROADMAP.md` (bottom).
 - Deferred product questions for post-0.1 dogfooding: checklist `/` filter,
   persistent size cache, apt-orphan parity.
+- Flatpak packaging is **decided** (D11: not before 1.0), not an open question.
