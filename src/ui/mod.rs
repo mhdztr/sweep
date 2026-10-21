@@ -4,7 +4,9 @@
 pub mod checklist;
 pub mod format;
 pub mod progress;
+pub mod render;
 pub mod table;
+pub mod tty;
 
 use crate::ctx::Ctx;
 use crate::ui::format::format_bytes;

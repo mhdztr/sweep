@@ -88,9 +88,51 @@ publishing from `main` without tags.
 *Context:* explicit user requirement; emoji break alignment and terminal
 portability.
 *Decision:* tier glyphs are ASCII `+ ! #` in every mode; no emoji anywhere in
-TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII.
+TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII
+**within the checklist renderer** (D16); `scan` output is not yet ASCII-clean
+under the flag (deferred, ROADMAP M3) (the dynamic-text half of that guarantee
+is enforced in `ui::render::sanitize`; see D16).
 *Consequences:* width math + the golden snapshots changed; the UI specs'
 examples were updated to ASCII in the same commit as the code (M2, first task).
+
+**D16: Dynamic text is sanitized at the render boundary: ASCII under `--no-unicode`, controls always stripped.**
+*Context:* the reviewer (B1) found that the slice-2 renderer ASCII-ized only its
+chrome: a row `title` (`render.rs` `row.title`) and a note text (incl.
+`guard {reason}`) were appended verbatim, so `Selection::new(&[…], Regular, false,
+false, &{"a" => "na\u{ef}ve running"})` rendered a non-ASCII byte with `unicode: false`
+and `frame.is_ascii() == false`; the tests passed only because their fixtures
+were ASCII. The same sink is a terminal-escape injection vector: `display_width`/
+`truncate` treat `ESC[…` as zero-width and copy it whole, so a crafted title
+(future `system/proc.rs` process names) would be emitted and executed by the
+terminal. `CONTEXT.md`/`docs/CLI-UX.md` already asserted the opposite invariant.
+*Decision:* one pure helper, `ui::render::sanitize(text, unicode)`, applied to
+every piece of *dynamic* text (row title, guard/disabled reason, any note) in
+`render_row`, and to the footer's content before painting. It strips (a) every
+control char (C0 `0x00-0x1f` incl. `ESC` `0x1b`, C1 `0x80-0x9f` incl. the
+8-bit CSI `0x9b`, and DEL `0x7f`) **always**, regardless of `theme.unicode`
+(escape injection is not a Unicode-vs-ASCII question), and (b) every non-ASCII
+char when `!theme.unicode`. Chars are **dropped**, not replaced with `?`: the
+sanitizer must never lengthen the string it hands the width/truncate math.
+`theme.unicode == true` keeps legitimate Unicode (accents, CJK, box drawing,
+`·`, `…`) unchanged; only controls go. Chrome-only lines are unchanged, since
+their content is module literals that are already ASCII-clean.
+*Rejected:* `?`-per-char substitution (lengthens the string; can overflow a full
+row and collapse it to a bare ellipsis, regression-tested); scoping the
+guarantee to chrome and "fixing the docs instead" (rejected by the reviewer)
+(this rejection applies to `ui::render.rs`; the CLI-wide claim is a separate,
+deferred item).
+*Consequences:* `docs/CLI-UX.md` §3/§8/§11 and this file now state exactly what
+`--no-unicode` guarantees; tests that claimed the invariant but used ASCII
+fixtures (`src/ui/render.rs`, `tests/checklist_render.rs`) now carry a non-ASCII
+title **and** a non-ASCII guard reason and assert `frame.is_ascii()`; a new test
+asserts no `ESC`/C1/DEL byte survives under **either** unicode setting. A second
+bug surfaced while testing the first: running `sanitize` over an already-painted
+line (the first footer draft) stripped the SGR introducer and left the CSI *body*
+(`[2m`) as visible text, so the sanitizer runs on content *before*
+`Theme` paints it. Scope: this guarantee is the **checklist renderer's**
+(`ui::render.rs`); `scan`'s pre-existing `ui/mod.rs` header/footer and
+`ui/table.rs` `—` placeholders are non-ASCII under the flag and are **not**
+covered; tracked as a ROADMAP M3 task (see D13).
 
 **D14: The interactive checklist is hand-rolled; `inquire` is not its renderer.**
 *Context:* ROADMAP M2 and ARCHITECTURE §7 planned `inquire::MultiSelect` with a
@@ -105,6 +147,30 @@ retained only for typed-`PURGE` input in `ui/confirm.rs` (M2/M4).
 (PURGE input not yet written).
 *Consequences:* the `Cargo.toml` machete ignore comment for `inquire` is corrected;
 ARCHITECTURE §7 updated; the core is unit-testable without a tty.
+
+**D15: Raw-mode terminal I/O is hand-rolled on `libc`/termios; no TUI dependency.**
+*Context:* D14 requires a hand-rolled checklist; `inquire` 0.9.4 cannot express the
+required keys/row states. The ROADMAP RISK table named "simple own prompt loop on
+raw tty (termios)" as the fallback. The project already depends on `libc` for
+`terminal_width()` (ARCHITECTURE §7) and is Linux-only (§17).
+*Decision:* raw mode, key decoding, cursor hide/show, and SIGINT/SIGWINCH handling
+live in `src/ui/tty.rs`, implemented with `libc` (`tcgetattr`/`tcsetattr`/`ioctl`/
+`signal`, ISIG kept on so Ctrl-C keeps `SIGINT` semantics). No `crossterm`/`ratatui`/
+`console` dependency is added. The renderer is a pure `src/ui/render.rs`
+(`render_frame`, `render_totals_bar`, `render_help`); the event loop is a thin
+impure shell in `ui/checklist.rs` (`run_interactive`), with the key→intent mapping
+(`apply_key`) factored out as a pure, tty-free function.
+*Rejected:* `crossterm` (new dep tree + `deny.toml`/machete churn for a Linux-only
+CLI), `inquire` (D14).
+*Consequences:* confined, SAFETY-commented `unsafe` in `src/ui/tty.rs` (the
+`libc` call-sites: `isatty`, `tcgetattr`, `tcsetattr`, `fcntl`/`O_NONBLOCK`, the
+cursor `write`, `read`, `poll`, `sigaction`/`sigemptyset`,
+`mem::zeroed`/`assume_init`, and `Drop`'s `tcsetattr`; 21 `unsafe {` blocks in
+`src/ui/tty.rs`, 13 production (each SAFETY-commented) and 8 test-only) plus one
+`isatty` probe in `src/ui/checklist.rs` (does the checklist own stdout? the
+module is otherwise pure) and the pre-existing `ioctl` in `src/ui/mod.rs`;
+`--no-unicode`/color stay on the existing `Theme`; the renderer is unit-testable
+without a tty.
 
 ## 3. Conventions
 
@@ -203,6 +269,9 @@ acceptance gate; verify checksums + provenance before publishing; update AUR
 | 2026-10-20 | R7 | Dependabot's first cargo group PR (7 bumps) diagnosed: jwalk 0.9 is unmaintained and its API break (removed `read_children_error`) broke `src/scan/walker.rs`; pin held at 0.8.x and `jwalk >=0.9.0` added to Dependabot's ignore list. The same bump retired both advisory ignores: indicatif 0.18 dropped `number_prefix`, inquire 0.9 dropped `fxhash`; `deny.toml` `[advisories] ignore` is now empty. Other six bumps (comfy-table 8, dirs 7, indicatif 0.18, inquire 0.9, toml 1.1, clap_mangen 0.3) verified green across all checks including MSRV 1.88 |
 | 2026-10-20 | R6 | M1.5 infra landed: five workflows (ci/security/scheduled/release/packaging), `deny.toml` (two dated `unmaintained` ignores: fxhash via inquire, number_prefix via indicatif), `SECURITY.md`, `CHANGELOG.md`, Dependabot; Cargo metadata `rust-version = "1.88"` (discovered by bisection: comfy-table let-chains floor, above the 1.85 edition-2024 floor); release profile `strip = "debuginfo"` for `cargo auditable` survival; machete ignores in `[package.metadata.cargo-machete]`; actionlint placed in `security.yml` (resolves the ROADMAP parenthetical). No `sweep` behavior change (only a `src/config.rs` doc-comment link fix for the `docs` gate) |
 | 2026-10-20 | R9 | M2 task 2 slice 1: renderer-agnostic checklist core (`src/ui/checklist.rs`): `Selection`/`RowState`/`Row` over `&[RuleResult]`, tier-grouped ordering (report-only rows last, D9), intent methods (toggle/select-all-safe/none/invert/preset-cycle), live `Totals`, `selected()`; SAFETY §2 defaults transcribed, destructive locked outside `full` (unlocked-but-unchecked under `full`, and under `--i-know-what-im-doing` in every preset; the flag is sticky across `p` cycles), `--yes` inert, guarded/report-only never selectable, `!applied` wins over guards (`Disabled`), guarded destructive stays locked outside `full`. No CLI wiring (`Commands::Clean` still stubbed). D14: checklist is hand-rolled, not inquire. Tests: `tests/checklist_core.rs` (no tty). |
+| 2026-10-20 | R10 | M2 task 2 slice 2: checklist renderer + event loop. New `src/ui/tty.rs` (hand-rolled raw mode on `libc`/termios: `tcgetattr`/`tcsetattr`, cursor hide/show, SIGINT/SIGWINCH via async-signal-safe `AtomicBool`, RAII `RawMode` guard restoring termios + cursor on Drop; ISIG kept on so Ctrl-C aborts with signal semantics) and `src/ui/render.rs` (pure frame renderer: tier groups from the slice-1 ordering, `>` cursor marker, state notes, live totals bar `  4 selected · 13.3 GiB  ·  2 guarded · 1 locked`, `?` help overlay; ASCII-only under `--no-unicode`, color via the existing `Theme`; every line clamped to width). `src/ui/checklist.rs` gains `run_interactive` + the pure `apply_key` key→intent seam + `Outcome`/`LoopStep`, with the loop erasing the previous frame by moving up `frame_height` rows (the `p` notice is one frame; abort = `Outcome::Aborted`). D15 records the no-new-dependency raw-mode decision. No CLI wiring (`Commands::Clean` still stubbed); slice 2 is library-only. Tests: `tests/checklist_render.rs` (12), `tests/checklist_keys.rs` (10), `tests/checklist_tty.rs` (6, scripted key seam, no live tty), `tests/checklist_pty.rs` (7, real pty driving `run_interactive`: multi-byte reads, lone-ESC abort, CRLF frames, a >`READ_BUF` single write fully drained). Every line is clamped to `render::MIN_WIDTH` or wider (the `truncate` clamp is ANSI-safe so a colored narrow frame cannot leak a partial SGR). Follow-up: the split-arrow pty test wrote its `ESC`/`[`/`B` bytes 180 ms apart, past `tty::READ_TIMEOUT_MS` (100 ms), so the lone `ESC` correctly resolved to abort; the harness now takes a `gap_ms` and the split test uses 15 ms (inside one poll window), keeping the lone-ESC-abort guarantee explicit. The unused `read_key` wrapper was deleted (`read_key_event` carries the idle/EOF distinction); the pacing-is-the-source's-job assumption is now documented at the loop's idle arm. Hardening: `read_key_event` reads fd 0 with `read(2)` (not `std::io::stdin()`, whose `BufReader` stranded bytes larger than the read buffer where `poll` could not see them, deadlocking a paste); fd 0 is `O_NONBLOCK` for the session and the read loop drains all queued bytes. A partially buffered CSI prefix is resolved to `Abort` only after a *full* idle poll window with no further byte (so a split `ESC`/`[`/`B` reassembles while a genuinely lone `ESC` still aborts). stdin EOF maps to `Input::Closed` and `read_key_event` *returns* on it (draining any queued keys first) rather than setting a flag and looping: a hung-up fd reads 0 forever and never `EAGAIN`, so the earlier loop spun hot. The EOF contract is tested deterministically at both levels (`read_available` maps a closed pipe to `Eof` and an empty `O_NONBLOCK` pipe to `WouldBlock`; the `run_interactive_with_source` seam yields `Source::Eof` and asserts the loop stops with `Outcome::Aborted`), rather than through a pty hangup, which delivers `SIGHUP` and kills the child before the EOF can be observed. |
+| 2026-10-21 | R11 | M2 task 2 slice 2 revision round (reviewer B1 + C1, D16): dynamic text is now sanitized at the render boundary. New pure `ui::render::sanitize(text, unicode)` strips every control char (C0 `0x00-0x1f` incl. `ESC`, C1 `0x80-0x9f` incl. the 8-bit CSI `0x9b`, DEL `0x7f`) **always**, and every non-ASCII char under `--no-unicode`; chars are dropped, not replaced, so the width/truncate math can never be lengthened. `render_row` runs it over the title and every note before `Theme` paints; `render_footer` runs it over its content before painting. Before this, `--no-unicode` ASCII-ized chrome only, so a non-ASCII title or `guard` reason leaked (probe: `frame.is_ascii() == false`) and an `ESC[2J` in a title reached the terminal verbatim (`display_width`/`truncate` treat `CSI` as zero-width and copy it whole). Chrome behavior is unchanged. Tests: 4 new unit tests + 1 new integration test (non-ASCII title **and** non-ASCII guard reason under `--no-unicode` assert `frame.is_ascii()`; a crafted `ESC[2J`/`0x9b`/`DEL` title and reason assert no such byte survives under unicode, `--no-unicode` and color, and that every remaining `ESC` is the renderer's own SGR); the two tests that claimed the invariant while using ASCII fixtures now use the failing fixtures (`tests/checklist_render.rs` 13, `src/ui/render.rs` 17). A second bug surfaced while testing: sanitizing an already-painted line stripped the SGR introducer and left the CSI body `[2m` as visible text, so the sanitizer runs on content before paint. Docs synced: CLI-UX §3/§8/§11 + the flag table state the dynamic-text guarantee exactly, and this R row + D16 record it. Still library-only (`Commands::Clean` remains the stub); no new dependencies. |
+| 2026-10-21 | R12 | B2 (slice-2 cleanup): the `--no-unicode` "pure ASCII" guarantee was documented as CLI-wide but is only true for the checklist renderer (`ui::render.rs`, D16). Docs re-scoped (CLI-UX §flag-table/§3/§8/§11, D13/D16) to the checklist and the `scan` gap named explicitly; global ASCII-clean `scan` output deferred to a new ROADMAP M3 task. No code change (pre-existing M1 `scan` chrome: `ui/mod.rs` `·`, `ui/table.rs` `—`). |
 
 ## 8. Open questions
 

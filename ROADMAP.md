@@ -124,10 +124,13 @@ Tasks:
       same commit (decision D13). Done in R8.
 - [ ] `ui/checklist.rs`: hand-rolled prompt loop (D14; `inquire` not used) + keybindings
       (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled/report-only).
-      The renderer-agnostic core (Selection, tests) landed R9; renderer/event loop pending.
-      R9 covers: tier ordering with report-only rows last, sticky `--i-know-what-im-doing`
-      across preset cycles, guard precedence (`!applied` wins → `Disabled`; guarded
-      destructive stays locked outside `full`).
+      Core landed R9 (tier ordering with report-only rows last, sticky `--i-know-what-im-doing`
+      across preset cycles, guard precedence: `!applied` wins → `Disabled`, guarded
+      destructive stays locked outside `full`); renderer/event loop landed R10:
+      pure `ui/render.rs`, raw mode on `libc` in `ui/tty.rs` (D15), `run_interactive`/
+      `apply_key` in `ui/checklist.rs`. Library-only (D14/D15); remaining: wire
+      `Commands::Clean` to `run_interactive` (still the `not_yet` stub) and connect
+      the accepted selection to `ui/confirm.rs` gates.
 - [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection
@@ -167,6 +170,11 @@ Tasks:
 - [ ] `rules/snapshots.rs`: `snapshots-report` (report-only; never enters Plan)
 - [ ] `ui/confirm.rs`: P2 per-rule confirms + list pagination (`confirm_batch`)
 - [ ] `rules list` command (states: ready/guarded/sudo/disabled/locked)
+- [ ] ASCII-clean `scan`/`rules list` output under `--no-unicode`: gate the pre-existing
+      `ui/mod.rs` header/footer `·` separators (`:101,:103,:108,:159`) and `ui/table.rs`
+      `—` placeholders (`:293,:301,:379,:389,:496,:560`) and `·` separators
+      (`:562,:570,:594,:597`) on `theme.unicode`; re-record
+      `scan_golden__scan_table_ascii.snap`. Deferred from R12/B2 (slice-2 cleanup).
 - [ ] Config: `[rules.*]` sections validated (known keys), `[presets]` honored
 - [ ] Tests per rule per catalog requirement + sub-row defaults + argv snapshots
 

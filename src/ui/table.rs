@@ -34,15 +34,50 @@ pub fn display_width(s: &str) -> usize {
 
 /// Hard-truncate `s` to `max` display columns; appends `…`/`...` when
 /// anything was cut.
+///
+/// ANSI-safe: a CSI sequence (ESC `[` … final byte 0x40..=0x7E) is *copied
+/// whole* to the output and contributes 0 columns, so a cut can never land
+/// inside `\x1b[38;2;…` and leave the terminal colored (the previous version
+/// counted SGR parameter bytes as width and split sequences in half). When the
+/// cut happens while a color is open, a `\x1b[0m` reset is appended so the
+/// terminal is never left painted.
 pub fn truncate(s: &str, max: usize, unicode: bool) -> String {
     let ellipsis = if unicode { "…" } else { "..." };
     if display_width(s) <= max {
         return s.to_string();
     }
-    let budget = max.saturating_sub(display_width(ellipsis)).max(1);
+    // Reserve the ellipsis's columns for the marker, but never force a text
+    // budget larger than `max` allows: at `max` < ellipsis width the result
+    // below is the ellipsis itself trimmed to `max`, so the output still fits.
+    let budget = max.saturating_sub(display_width(ellipsis));
     let mut out = String::new();
     let mut w = 0usize;
-    for c in s.chars() {
+    let mut chars = s.chars().peekable();
+    // Whether an SGR/CSI paint is currently open in `out` (set by any CSI we
+    // copied, cleared by a reset copy); drives the closing reset below.
+    let mut painted = false;
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            // Copy the whole escape (CSI body or the lone ESC) verbatim: it
+            // costs 0 columns and must never be split.
+            out.push(c);
+            if chars.peek() == Some(&'[') {
+                out.push(chars.next().expect("peeked `[`"));
+                let mut body = String::new();
+                for n in chars.by_ref() {
+                    body.push(n);
+                    if ('\u{40}'..='\u{7e}').contains(&n) {
+                        break;
+                    }
+                }
+                if body == "m" || body.ends_with('m') {
+                    // `\x1b[m` and `\x1b[0m` are resets; `\x1b[38;…m` opens one.
+                    painted = !(body == "m" || body.starts_with('0'));
+                }
+                out.push_str(&body);
+            }
+            continue;
+        }
         let cw = UnicodeWidthChar::width(c).unwrap_or(0);
         if w + cw > budget {
             break;
@@ -50,7 +85,31 @@ pub fn truncate(s: &str, max: usize, unicode: bool) -> String {
         out.push(c);
         w += cw;
     }
-    out.push_str(ellipsis);
+    if painted {
+        out.push_str("\u{1b}[0m");
+    }
+    if budget == 0 {
+        // `max` is narrower than the ellipsis: keep only `max` columns of it.
+        out.push_str(&truncate_plain(ellipsis, max));
+    } else {
+        out.push_str(ellipsis);
+    }
+    out
+}
+
+/// Truncate an escape-free string to at most `max` display columns, with no
+/// ellipsis (used only for the narrow-`max` ellipsis path in [`truncate`]).
+fn truncate_plain(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    let mut w = 0usize;
+    for c in s.chars() {
+        let cw = UnicodeWidthChar::width(c).unwrap_or(0);
+        if w + cw > max {
+            break;
+        }
+        out.push(c);
+        w += cw;
+    }
     out
 }
 
@@ -566,6 +625,38 @@ mod tests {
         // Wide (2-col) chars prove column-aware truncation.
         assert_eq!(truncate("漢字漢", 5, true), "漢字…");
         assert_eq!(truncate("漢字漢", 4, true), "漢…");
+    }
+
+    #[test]
+    fn truncate_never_splits_an_ansi_sequence() {
+        // A truecolor SGR opener is 18 bytes but 0 columns: the cut must land
+        // in the *text*, never inside `\x1b[38;2;…m` (the bug that left the
+        // terminal painted and swallowed the following characters).
+        let s = "\u{1b}[38;2;255;179;0mtier text here\u{1b}[0m more";
+        for max in 1..=24usize {
+            let cut = truncate(s, max, true);
+            assert!(
+                display_width(&cut) <= max,
+                "width {max}: {cut:?} is {} cols",
+                display_width(&cut)
+            );
+            // Every CSI in the result is complete: ESC [ … final byte.
+            let mut it = cut.chars().peekable();
+            while let Some(c) = it.next() {
+                if c == '\u{1b}' && it.peek() == Some(&'[') {
+                    it.next();
+                    let complete = it.by_ref().any(|n| ('\u{40}'..='\u{7e}').contains(&n));
+                    assert!(complete, "truncated sequence with width {max}: {cut:?}");
+                }
+            }
+            // A paint left open must be closed by a reset.
+            if cut.matches('\u{1b}').count() % 2 == 1 {
+                assert!(
+                    cut.contains("\u{1b}[0m"),
+                    "unclosed paint at width {max}: {cut:?}"
+                );
+            }
+        }
     }
 
     fn result(applied: bool) -> RuleResult {

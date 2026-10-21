@@ -25,7 +25,7 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 | `--dry-run` | – | plan preview: sample paths + would-run commands; zero changes |
 | `--json` | – | JSON stdout (schema `version:1`) |
 | `--no-color` | `NO_COLOR=1` | disable ANSI colors |
-| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII box drawing (`+ - |`) and `...` ellipsis instead of `│─┌…`; tier glyphs/labels (`+ ! # ~`), checkboxes (`[x]`/`[ ]`) and `lock`/`sudo`/`warn` markers are always ASCII (see §8) |
+| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII rendering for box drawing (`+ - |`) and `...` ellipsis instead of `│─┌…`; in the interactive checklist (§3) this also covers all dynamic text (row titles, guard/disabled reasons). Tier glyphs/labels (`+ ! # ~`), checkboxes (`[x]`/`[ ]`) and `lock`/`sudo`/`warn` markers are always ASCII. Note: `scan`'s header/summary separators (`·`) and table placeholders (`—`) remain non-ASCII under this flag today (deferred; see ROADMAP M3 task "ASCII-clean `scan` output"). See §3 and §8. |
 | `--keep-days <N>` | `SWEEP_KEEP_DAYS` | override global age gate (N ≥ 0) |
 | `--trash` | `SWEEP_TRASH=1` | soft-delete to XDG trash instead of hard delete |
 | `--yes` / `-y` | `SWEEP_YES=1` | auto-confirm **safe & caution** prompts; **not** destructive |
@@ -200,15 +200,45 @@ Standard clap: `sweep 0.1.0`, per-command help with examples section.
 
 ## 3. Interactive checklist spec
 
+> Implementation (R10): the hand-rolled loop (D14) and the pure renderer
+> (`ui/render.rs`) + raw-mode/keys (`ui/tty.rs`, D15) landed in M2. This section
+> is the target spec; the shipping slice-2 renderer draws a **compact two-line
+> header** (`  sweep <ver> · preset: <name>` + `  <n> rows · space toggle · ?
+> help · esc abort`) instead of the header box, and the row line does **not**
+> print `location` yet (the size is still right-aligned). Every line is clamped
+> to the terminal width, which is floored at `render::MIN_WIDTH`; under
+> `--no-unicode` the middot `·` separators degrade to `|` and box drawing to `-`
+> (D13).
+>
+> **D13/B1, precisely:** within the interactive checklist (`ui::render`),
+> `--no-unicode` guarantees pure ASCII for all checklist text, dynamic text
+> included: a row `title`, a `guard`/`disabled` reason, or any other note is
+> stripped of every non-ASCII char, not just the chrome (separators, box
+> drawing, ellipsis, `?` chrome) the flag originally covered. Independently of
+> the flag, **control chars are always stripped from
+> dynamic text**: C0 (`0x00-0x1f`, including `ESC` `0x1b`), C1 (`0x80-0x9f`,
+> including the 8-bit CSI `0x9b`) and DEL (`0x7f`) never reach the terminal from
+> a rule title or guard reason, so a crafted string cannot inject a terminal
+> escape sequence. The stripping is one pure helper (`render::sanitize`), applied
+> to the content **before** `Theme` paints it. With `--no-unicode` off, ordinary
+> Unicode in dynamic text (accents, CJK) is preserved exactly as before.
+>
+> This guarantee is scoped to the checklist renderer (`ui::render.rs`);
+> `scan`'s pre-existing header/footer/table chrome (`ui/mod.rs`, `ui/table.rs`)
+> is not yet ASCII-clean under the flag.
+
 ### 3.1 Layout
-Header box (identity + disk line) → scan progress → checklist card → live total bar.
-Rows: `[x] + safe  title   warn guard sudo  location` + right-aligned size.
+Header (identity + preset) → scan progress → checklist card → live total bar.
+Rows: `[x] + safe  title   warn guard sudo` + right-aligned size (the `location`
+column is specced but the slice-2 renderer does not print it yet).
+The cursor row is marked with `>` in its own left column (`  > [x] ···`,
+unmarked rows keep the column blank: `    [x] ···`).
 Row order: safe → caution → destructive → report-only (stable, docs-listed).
 
 ### 3.2 Keybindings
 | Key | Action |
 |---|---|
-| `space` | toggle row (destructive rows: only when preset=full, else beep+hint) |
+| `space` | toggle row (destructive rows: only when preset=full, else no-op) |
 | `↑`/`↓`, `Ctrl-P`/`Ctrl-N` | move cursor |
 | `a` | select all **safe** rows |
 | `n` | deselect all |
@@ -226,6 +256,14 @@ shows `disabled in config`) · `report-only` (info row, no checkbox).
 
 ### 3.4 Live total bar
 `  4 selected · 13.3 GiB  ·  2 guarded · 1 locked`; recompute <16 ms (pre-aggregated).
+All four groups always render (a zero group shows `0`), so the bar never jumps.
+
+### 3.5 Footer hints + `?` help (exact strings)
+Footer (leading two spaces for alignment with the rows):
+`  space toggle · a all-safe · n none · i invert · p preset · enter proceed · ? help · esc abort`.
+`?` toggles a keys overlay (toggle row / move cursor / select-all-safe / deselect /
+invert / preset cycle / proceed / hide help / abort), and the `p` cycle flashes
+`preset: <name> (replaces your selection)` for one frame.
 
 ---
 
@@ -341,8 +379,15 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 | age format | `2h`, `3d`, `47d`, `never` | previews |
 
 Width rules: ≥100 cols full · 60–99 drop `files`+`location`→tail · <60 two-line
-compact rows · `--no-unicode`: box drawing and the ellipsis only (`│─┌…` → `|-+...`);
-tier glyphs `+ ! # ~`, checkboxes `[x] [ ]` and `lock`/`sudo`/`warn` are always ASCII.
+compact rows · `--no-unicode`: box drawing and the ellipsis (`│─┌…` → `|-+...`)
+**and** (in the checklist renderer) every non-ASCII char in dynamic text (row
+titles, guard/disabled reasons) → stripped; tier glyphs `+ ! # ~`, checkboxes
+`[x] [ ]` and `lock`/`sudo`/`warn` are always ASCII. `scan`'s header/summary
+separators (`·`) and table placeholders (`—`) remain non-ASCII under the flag
+today (deferred; see ROADMAP M3 task "ASCII-clean `scan` output"). Control chars
+(C0 incl. `ESC`, C1 incl. `0x9b`, DEL) are always stripped from dynamic text
+regardless of the flag, so no rule title or guard reason can inject a terminal
+escape sequence.
 
 ## 9. JSON examples (v1, abridged)
 
@@ -383,7 +428,7 @@ tier glyphs `+ ! # ~`, checkboxes `[x] [ ]` and `lock`/`sudo`/`warn` are always 
 
 - Never color-only information: tier = glyph + word + color.
 - `NO_COLOR`/`--no-color`/`TERM=dumb` → full grayscale usability.
-- `--no-unicode`/bad locale → ASCII; sizes/tables stay aligned.
+- `--no-unicode`/bad locale → ASCII box drawing and ellipsis, and (in the interactive checklist) all dynamic text (titles, reasons) stripped to ASCII; `scan`'s table placeholders (`—`) and separators (`·`) are not yet ASCII-clean (deferred, ROADMAP M3).
 - Narrow (<60) terminals: two-line rows, no columns assumed.
 - Screen readers: prompt text is plain sentences; progress bars degrade to
   "scanning (n rules)…" when not a TTY? → progress only when TTY (clean rules

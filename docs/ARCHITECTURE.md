@@ -67,7 +67,9 @@ a `sweep-lib` ever becomes useful). Edition: latest stable Rust. MSRV: stable �
 │   │                        #   delete, protected-entry filters (shared with walker)
 │   ├── ui/
 │   │   ├── mod.rs           # Theme (tier→color), NO_COLOR/unicode gates, header box
-│   │   ├── checklist.rs     # inquire multi-select + custom renderer + keybindings
+│   │   ├── checklist.rs     # hand-rolled (D14): Selection core + event loop + apply_key
+│   │   ├── render.rs        # pure checklist frame renderer (no I/O; D15)
+│   │   ├── tty.rs           # hand-rolled raw mode on libc/termios, keys, signals (D15)
 │   │   ├── table.rs         # comfy-table presets (wide/narrow/ascii), size formatting
 │   │   ├── progress.rs      # indicatif: scan spinner-phase, clean per-rule bars
 │   │   ├── confirm.rs       # summary card, per-rule y/N, PURGE typed gate, abort copy
@@ -307,13 +309,17 @@ walk(root):
 - **Width handling:** `terminal_size()`; ≥100 cols → full table; 60–99 → drop
   `files` column + shorten paths with `~/…/tail`; <60 → compact list rows
   (two-line per rule). `--no-unicode` swaps box drawing to ASCII; tier and state
-  glyphs are ASCII in every mode (D13).
+  glyphs are ASCII in every mode (D13) (`scan`'s `·`/`—` chrome is not yet
+  ASCII-clean under the flag; see ROADMAP M3).
 - **Checklist:** hand-rolled prompt loop (D14) over a pure, renderer-agnostic
-  `ui::checklist::Selection` state model plus a slice-2 renderer/event loop;
-  prompt text = header
-  box; render loop re-renders live totals on every toggle. Keys: `space` toggle,
+  `ui::checklist::Selection` state model; the frame renderer is pure
+  (`ui::render::render_frame`), raw mode/keys live in `ui::tty` (D15, `libc`
+  termios), and the impure loop (`ui::checklist::run_interactive`, with the pure
+  `apply_key` seam) erases the previous frame by moving up `frame_height` rows
+  before each redraw; live totals recompute on every toggle. Keys: `space` toggle,
   `↑/↓` (also `Ctrl-P/N`), `a` all safe, `n` none, `i` invert, `p` preset cycle,
-  `/` filter (v0.2 candidate), `enter` confirm, `esc`/`q`/`Ctrl-C` abort.
+  `/` filter (v0.2 candidate), `?` help overlay, `enter` confirm,
+  `esc`/`q`/`Ctrl-C` abort → exit 2, nothing deleted.
 - **Row states:** `[x]/[ ]`, tier glyph (`+`/`!`/`#`), title, guard note,
   `sudo`/`lock` labels, right-aligned human size. Guarded rows show
   `[!] reason` and are *refused* at confirm if checked (msg: "browser running, "
