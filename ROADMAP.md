@@ -128,9 +128,14 @@ Tasks:
       across preset cycles, guard precedence: `!applied` wins → `Disabled`, guarded
       destructive stays locked outside `full`); renderer/event loop landed R10:
       pure `ui/render.rs`, raw mode on `libc` in `ui/tty.rs` (D15), `run_interactive`/
-      `apply_key` in `ui/checklist.rs`. Library-only (D14/D15); remaining: wire
-      `Commands::Clean` to `run_interactive` (still the `not_yet` stub) and connect
-      the accepted selection to `ui/confirm.rs` gates.
+      `apply_key` in `ui/checklist.rs`. In R9/R10 this core and renderer were
+      library-only (D14/D15): `Commands::Clean` was still the `not_yet` stub, so
+      nothing reached the CLI yet. Slice 3 (R13) closed that: `Commands::Clean`
+      now calls `run_interactive` and stops at the accepted-selection preview
+      (exit 0, no deletion, no lock). `--only`/`--exclude` filter scan results and
+      are registry-validated; `--json` and `--no-prompt` are refused until the
+      scripted flow exists. Remaining: the P1 summary and the `ui/confirm.rs`
+      gates it implies, plus the `exec/` connection.
 - [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection

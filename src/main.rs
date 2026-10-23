@@ -40,7 +40,11 @@ fn dispatch(mut root: Root) -> i32 {
         }
 
         Commands::Scan => sweep::cli::scan::run(root),
-        Commands::Clean { .. } => not_yet("clean", "M2: interactive clean"),
+        Commands::Clean {
+            only,
+            exclude,
+            no_prompt,
+        } => sweep::cli::clean::run(root, &only, &exclude, no_prompt),
         Commands::Top { .. } => not_yet("top", "M6: biggest-dirs report"),
         Commands::History { .. } => not_yet("history", "M4: run history"),
         Commands::Doctor => not_yet("doctor", "M5: environment diagnostics"),

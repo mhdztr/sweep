@@ -42,6 +42,15 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 > `FORCE_COLOR` / `TERM=dumb` (resolved by `should_color()`, see
 > `docs/ARCHITECTURE.md` §7 and the env table in CLI-UX §7).
 
+> **M2 note: `sweep clean` is wired up to the accepted-selection preview.**
+> No args and `clean` both run the §3 checklist, then print the accepted
+> selection (rule ids + sizes) and exit 0. Nothing is deleted yet: there is no
+> P1 summary (`ui/confirm.rs`) and no `Plan`/`exec/`. `--only`/`--exclude`
+> filter scan results before the checklist (exclude wins) and reject unknown
+> ids with the §5 error. `--json` and `--no-prompt` are refused on this path
+> until their non-interactive flow exists; `--dry-run`, `--trash` and `--yes`
+> are accepted but inert here.
+
 Hidden internal: `--internal-system-pass <PLAN_PATH>` (documented in SAFETY §7).
 
 ---
@@ -104,6 +113,18 @@ sweep clean --only tmp,trash --dry-run
 
 **Flow steps:** header → scan progress → checklist (§3) → gate(s) (§4) → execution
 progress → summary card (§2.2b) → history append.
+
+> **Implementation status (R13):** the interactive path stops at the
+> accepted-selection preview. After the §3 checklist accepts a non-empty
+> selection, `clean` prints `selected <N> categories | <bytes> would be deleted
+> (preview only; nothing deleted yet)` followed by one `  - <rule id>  <size>`
+> line per selected rule (`  [sudo]` marks system rules), then exits 0. An empty
+> accept prints `nothing selected, exiting` (exit 0) and abort prints
+> `aborted, nothing was deleted` (exit 2). No P1 summary, `Plan`, execution,
+> history write, `--trash` or `--dry-run` sample printing exists yet; `--json`
+> and `--no-prompt` are refused (exit 1). `--only`/`--exclude` are applied to
+> the scan results before `Selection::new` and validated against the rule
+> registry (`error: unknown rule '<id>'`, exit 1).
 
 #### 2.2b Summary card (every clean run)
 ```

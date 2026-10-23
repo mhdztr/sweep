@@ -190,6 +190,16 @@ main:
             ui::summary(report); exit(report.exit_hint)
 ```
 
+**M2 wiring status (R13):** `Commands::Clean` now runs the real path up to and
+including the checklist. Concretely: `scan::run` -> `--only`/`--exclude` filter
+(validated against `rules::registry()` before scanning) -> `Selection::new` ->
+`ui::checklist::run_interactive`. An accepted selection is printed by the pure
+`selection_preview` helper and the process exits 0; it is **not** turned into a
+`Plan` and nothing is executed. Abort is exit 2, empty accept is exit 0, and
+stdin without a TTY is exit 1. `--json` and `--no-prompt` are refused because
+the scripted/non-interactive branch does not exist yet. No lock is taken
+(read-only slice).
+
 **Clean flow detail:**
 
 ```

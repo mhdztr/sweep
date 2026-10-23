@@ -62,15 +62,50 @@ fn help_lists_every_documented_command() {
 }
 
 #[test]
-fn no_args_defaults_to_clean_flow() {
-    // Until M2 lands, default dispatch hits the clean stub: exit 1 + copy.
+fn no_args_in_a_pipe_requires_a_tty() {
+    // No args dispatches to `clean` (CLI-UX section 1); assert_cmd gives the child
+    // pipes, not a pty, so the no-TTY preflight fires: exit 1 + the copy.
+    let dir = tempfile::tempdir().expect("tempdir");
     sweep()
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
         .assert()
         .failure()
         .code(1)
+        .stdout(predicates::str::is_empty())
+        .stderr(predicates::str::contains("interactive mode requires a TTY"));
+}
+
+#[test]
+fn clean_without_tty_errors_and_exits_1() {
+    // CLI-UX section 1/section 5: never hang, never enter raw mode, no partial frame.
+    let dir = tempfile::tempdir().expect("tempdir");
+    sweep()
+        .arg("clean")
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicates::str::is_empty())
         .stderr(predicates::str::contains(
-            "`sweep clean` is not implemented yet",
+            "error: interactive mode requires a TTY; use --preset/--only with --yes",
         ));
+}
+
+#[test]
+fn clean_json_without_tty_is_refused() {
+    // Ordering is pinned: the TTY preflight runs BEFORE the --json refusal.
+    let dir = tempfile::tempdir().expect("tempdir");
+    sweep()
+        .args(["clean", "--json"])
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicates::str::is_empty())
+        .stderr(predicates::str::contains("interactive mode requires a TTY"));
 }
 
 #[test]

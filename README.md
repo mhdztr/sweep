@@ -9,8 +9,10 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
 > what works today. **`sweep scan` works** (M1: read-only measurement, table +
-> `--json`); `clean`, `top`, `history`, `doctor` are still milestone stubs.
-> Core commands land milestone by milestone.
+> `--json`). **`sweep clean` is wired up to the interactive checklist** (M2,
+> R13): it scans, lets you toggle rows, and prints the accepted selection as a
+> preview; it does not delete anything yet (no gates/exec). `top`, `history`,
+> `doctor` are still milestone stubs. Core commands land milestone by milestone.
 
 ## Why
 
