@@ -48,6 +48,11 @@ kernel/filesystem bugs.
 4. Any prompt: `Esc`/`Ctrl-C` → abort message `aborted, nothing was deleted` → exit 2.
 5. Execution re-validates each target against the allowed-prefix list
    (independent second check, not trusting the plan alone).
+6. `clean` in this slice (R13) stops at the accepted-selection preview: the
+   preview is not an execution path, so it deletes nothing, writes no history
+   and takes no run lock (SAFETY §10: the lock guards mutating runs only). An
+   accepted empty selection exits 0 with `nothing selected, exiting`; abort
+   still exits 2 with `aborted, nothing was deleted`.
 
 ## 3. Never-touch list (hardcoded; not configurable away)
 
