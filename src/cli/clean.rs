@@ -1,14 +1,12 @@
-//! `sweep clean`: scan, interactive checklist, accepted-selection preview.
-//! Spec: `docs/CLI-UX.md` sections 1/2.2/3/5/6; gates: `docs/SAFETY.md` section 2.
+//! `sweep clean`: scan, interactive checklist, P1 gate, accepted-selection preview.
+//! Spec: `docs/CLI-UX.md` sections 1/2.2/3/4/5/6; gates: `docs/SAFETY.md` section 2.
 //!
-//! Scope of this slice (R13): this is the wiring seam between the M1 read-only
-//! scan and the M2 checklist. It runs scan -> `Selection` -> `run_interactive`
-//! and then PRINTS the accepted selection. It performs ZERO mutations and takes
-//! NO lock (SAFETY section 10: the lock is for mutating runs only).
+//! Flow: scan -> `Selection` -> `run_interactive` -> P1 `confirm_p1` (raw mode,
+//! signal-safe, only `y`/`Y` proceeds) -> print accepted selection or abort.
+//! It performs ZERO mutations and takes NO lock (SAFETY section 10: the lock is
+//! for mutating runs only).
 //!
 //! Deliberately deferred (all still M2/M4 tasks):
-//! - the P1 summary/confirm screen (`ui/confirm.rs`, ROADMAP.md:138): the
-//!   accepted selection is printed, not confirmed;
 //! - `exec/` deletion, `Plan`, dry-run sample/argv printing, `--trash`,
 //!   history/log writes, the batched sudo pass and exit code 3;
 //! - `--json` for clean (JSON-SCHEMAS section 12, M6 per ROADMAP.md:239);
@@ -20,6 +18,7 @@ use crate::ctx::Ctx;
 use crate::scan::{self, ScanEvent};
 use crate::ui::Theme;
 use crate::ui::checklist::{Outcome, Selected, Selection, run_interactive};
+use crate::ui::confirm::{self, ConfirmItem, ConfirmOutcome};
 use crate::ui::format::format_bytes;
 use std::collections::BTreeMap;
 use std::io::IsTerminal as _;
@@ -135,11 +134,30 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                 println!("{EMPTY_SELECTION_COPY}");
                 return 0;
             }
-            // TODO(M2, ROADMAP.md:138): replace this preview with the P1
-            // summary from ui/confirm.rs (default = cancel), then build the
-            // Plan and hand it to exec/. This slice deletes nothing.
-            print!("{}", selection_preview(&items, &theme));
-            0
+            // P1 summary (default cancel). Compute destructive count by looking up tiers from registry.
+            let confirm_items: Vec<ConfirmItem> = items
+                .iter()
+                .map(|i| ConfirmItem {
+                    id: i.id,
+                    bytes: i.bytes,
+                    needs_sudo: i.needs_sudo,
+                })
+                .collect();
+            match confirm::confirm_p1(&confirm_items, &theme) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
+                    eprintln!("{NO_TTY_COPY}");
+                    1
+                }
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    1
+                }
+                Ok(ConfirmOutcome::Abort) => 2,
+                Ok(ConfirmOutcome::Proceed) => {
+                    print!("{}", selection_preview(&items, &theme));
+                    0
+                }
+            }
         }
     }
 }
