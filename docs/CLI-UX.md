@@ -42,10 +42,9 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 > `FORCE_COLOR` / `TERM=dumb` (resolved by `should_color()`, see
 > `docs/ARCHITECTURE.md` §7 and the env table in CLI-UX §7).
 
-> **M2 note: `sweep clean` is wired up to the accepted-selection preview.**
-> No args and `clean` both run the §3 checklist, then print the accepted
-> selection (rule ids + sizes) and exit 0. Nothing is deleted yet: there is no
-> P1 summary (`ui/confirm.rs`) and no `Plan`/`exec/`. `--only`/`--exclude`
+> **M2 note: `sweep clean` is wired up with the P1 summary gate.**
+> No args and `clean` both run the §3 checklist, then show the P1 summary gate
+> (`ui/confirm.rs`) before proceeding. `--only`/`--exclude`
 > filter scan results before the checklist (exclude wins) and reject unknown
 > ids with the §5 error. `--json` and `--no-prompt` are refused on this path
 > until their non-interactive flow exists; `--dry-run`, `--trash` and `--yes`
@@ -114,17 +113,19 @@ sweep clean --only tmp,trash --dry-run
 **Flow steps:** header → scan progress → checklist (§3) → gate(s) (§4) → execution
 progress → summary card (§2.2b) → history append.
 
-> **Implementation status (R13):** the interactive path stops at the
-> accepted-selection preview. After the §3 checklist accepts a non-empty
-> selection, `clean` prints `selected <N> categories | <bytes> would be deleted
+> **Implementation status:** the interactive path runs the §3 checklist, then
+> the P1 summary gate (`ui/confirm.rs`) using raw mode with signal handling.
+> Only literal `y`/`Y` proceeds; Enter, Esc, `q`/`Q`, Ctrl-C, EOF, or any other
+> input aborts with `aborted, nothing was deleted` (exit 2). After acceptance,
+> `clean` prints `selected <N> categories | <bytes> would be deleted
 > (preview only; nothing deleted yet)` followed by one `  - <rule id>  <size>`
 > line per selected rule (`  [sudo]` marks system rules), then exits 0. An empty
 > accept prints `nothing selected, exiting` (exit 0) and abort prints
-> `aborted, nothing was deleted` (exit 2). No P1 summary, `Plan`, execution,
-> history write, `--trash` or `--dry-run` sample printing exists yet; `--json`
-> and `--no-prompt` are refused (exit 1). `--only`/`--exclude` are applied to
-> the scan results before `Selection::new` and validated against the rule
-> registry (`error: unknown rule '<id>'`, exit 1).
+> `aborted, nothing was deleted` (exit 2). No `Plan`, execution, history write,
+> `--trash` or `--dry-run` sample printing exists yet; `--json` and `--no-prompt`
+> are refused (exit 1). `--only`/`--exclude` are applied to the scan results
+> before `Selection::new` and validated against the rule registry
+> (`error: unknown rule '<id>'`, exit 1).
 
 #### 2.2b Summary card (every clean run)
 ```
@@ -300,7 +301,7 @@ invert / preset cycle / proceed / hide help / abort), and the `p` cycle flashes
   └─────────────────────────────────────────────┘
   Proceed? [y/N] (cancel is default)  ▸
 ```
-Typed `y`/`Y` only; **Enter = cancel** (documented, tested).
+Typed `y`/`Y` only; **Enter = cancel**. Esc, `q`/`Q`, Ctrl-C, EOF, or any other input aborts. P1 uses raw mode with signal handling (same machinery as the checklist).
 
 ### P2: per-caution-rule confirm (shown when a caution rule selected)
 ```
@@ -370,7 +371,7 @@ Decline → those items reported `skipped (sudo declined)`; user pass result sta
 |---|---|
 | 0 | success · nothing to do · dry-run completed · report-only command ok |
 | 1 | usage/config/environment errors (nothing executed) |
-| 2 | user aborted (Esc, Ctrl-C at prompt, wrong PURGE, `--yes` hitting destructive) |
+| 2 | user aborted (Esc, Ctrl-C at P1/checklist/prompt, wrong PURGE, `--yes` hitting destructive) |
 | 3 | completed with ≥1 rule error or system-pass failure (summary details) |
 
 ## 7. Environment variables
@@ -443,7 +444,7 @@ escape sequence.
 - **Timer:** `systemctl enable --now sweep.timer` → weekly report-only scan logged
   to journal (`journalctl -u sweep`); auto-clean mode is an explicit unit override
   documented in README (never default).
-- **Prompt integration:** exit code 2 (aborted) never prints errors (safe in `&&` chains).
+- **Prompt integration:** exit code 2 (aborted) prints `aborted, nothing was deleted` to stderr (safe in `&&` chains).
 
 ## 11. Accessibility & degenerate terminals
 

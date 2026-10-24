@@ -439,6 +439,7 @@ pub fn apply_key(sel: &mut Selection, key: Key, frame: &mut FrameOpts) -> LoopSt
         Key::Help => frame.help = !frame.help,
         Key::Enter => return LoopStep::Stop(true),
         Key::Abort => return LoopStep::Stop(false),
+        Key::Yes => {}
         Key::Resize | Key::Unknown => {}
     }
     LoopStep::Continue

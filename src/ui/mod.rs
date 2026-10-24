@@ -2,6 +2,7 @@
 //! Spec: plan §2.15; copy: `docs/CLI-UX.md` §2.1 / §5.
 
 pub mod checklist;
+pub mod confirm;
 pub mod format;
 pub mod progress;
 pub mod render;

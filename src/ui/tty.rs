@@ -201,6 +201,8 @@ pub enum Key {
     Help,
     /// `esc` / `q` / Ctrl-C: abort, exit 2, nothing done.
     Abort,
+    /// `y` / `Y`: proceed (P1)
+    Yes,
     /// `\0` byte: Ctrl-Space. Decodes to [`Key::Unknown`]'s intent (a no-op);
     /// kept as a distinct variant because the byte is recognized, not stray.
     Resize,
@@ -227,8 +229,10 @@ pub fn decode(bytes: &[u8]) -> Key {
         [b'i'] => Key::Invert,
         [b'p'] => Key::Preset,
         [b'q'] => Key::Abort,
+        [b'Q'] => Key::Abort,
         [b'?'] => Key::Help,
         [b'\r'] | [b'\n'] => Key::Enter,
+        [b'y'] | [b'Y'] => Key::Yes,
         [0x00] => Key::Resize,
         // Ctrl-C when it reaches us as a byte (a pty/source where ISIG is off);
         // with ISIG on it never gets here, the terminal raises SIGINT instead.
@@ -730,6 +734,9 @@ mod tests {
         assert_eq!(decode(b"i"), Key::Invert);
         assert_eq!(decode(b"p"), Key::Preset);
         assert_eq!(decode(b"q"), Key::Abort);
+        assert_eq!(decode(b"Q"), Key::Abort);
+        assert_eq!(decode(b"y"), Key::Yes);
+        assert_eq!(decode(b"Y"), Key::Yes);
         assert_eq!(decode(b"?"), Key::Help);
         assert_eq!(decode(b"\r"), Key::Enter);
         assert_eq!(decode(b"\n"), Key::Enter);

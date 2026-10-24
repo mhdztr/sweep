@@ -140,7 +140,7 @@ Tasks:
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection
       preview over safe+caution+destructive, no destructive run happens before M4)
-- [ ] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths
+- [x] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths (raw mode, signal handling, only `y`/`Y` proceeds, Esc/`q`/Ctrl-C/Enter/EOF abort)
 - [ ] `exec/`: `del.rs` primitives (bottom-up, no-follow, prefix re-check, hot-skip),
       plan execution sequential, continue-on-error, per-rule Report
 - [ ] Dry-run printing (samples + argv), `--yes` (safe/caution only)
