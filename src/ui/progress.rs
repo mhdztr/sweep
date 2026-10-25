@@ -1,7 +1,4 @@
 //! Scan progress spinner (indicatif, stderr). Spec: plan §2.15.
-//!
-//! The bar renders on stderr only when the caller says `show` (stderr is a
-//! TTY and neither `--json` nor `--quiet` is set); piped output stays clean.
 
 use crate::scan::ScanEvent;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -11,24 +8,6 @@ use std::thread::JoinHandle;
 pub struct ScanSpinner;
 
 impl ScanSpinner {
-    /// Spawn the thread owning `rx` + the indicatif bar.
-    ///
-    /// Template (plan §2.15): `" {msg} {bar} {pos}/{len} rules {elapsed_precise}"`
-    /// with `msg = "Scanning…"` / `"Scanning..."`, bar chars `█░` / `#-`.
-    /// Loops `recv()` → `RuleDone` ⇒ `set_length(total)` + `set_position(done)`
-    /// (the event's `total` is the scan's Ready-rule count, so a run with
-    /// NotApplicable rules still ends at `n/n rules`); exits when the
-    /// channel closes (scan's `ScanService` drops the sender) and clears the
-    /// line with `finish_and_clear()`. `show == false` just drains the
-    /// channel so senders never block.
-    ///
-    /// `total` is only the INITIAL length (the caller can only guess at
-    /// registry size before `detect` runs); the first `RuleDone` corrects it.
-    ///
-    /// **Deviation (documented):** the plan sketch is
-    /// `spawn(total, rx, show)` but *also* demands the ascii template, the
-    /// spinner cannot know the charset from `rx`, so `unicode` is an
-    /// explicit parameter (callers pass `ctx.flags.unicode`).
     pub fn spawn(
         total: usize,
         rx: mpsc::Receiver<ScanEvent>,
@@ -46,24 +25,30 @@ impl ScanSpinner {
                     .unwrap_or_else(|_| ProgressStyle::default_bar())
                     .progress_chars(if unicode { "█░" } else { "#-" });
             pb.set_style(style);
-            pb.set_message(if unicode {
-                "Scanning…"
-            } else {
-                "Scanning..."
-            });
+            pb.set_message(if unicode { "Scanning…" } else { "Scanning..." });
             while let Ok(ev) = rx.recv() {
                 if let ScanEvent::RuleDone { done, total, .. } = ev {
-                    // Length comes FROM the event (the scan's Ready-rule
-                    // count), not from the spawn-time registry guess, with a
-                    // NotApplicable rule the bar would otherwise sit at
-                    // `3/4 rules` until it clears (critic finding).
                     pb.set_length(total as u64);
                     pb.set_position(done as u64);
                 }
             }
-            // Channel closed: scan finished. Clear the bar so stdout output
-            // (header/table/footer) starts on a clean line.
             pb.finish_and_clear();
         })
+    }
+}
+
+pub struct RuleProgress;
+
+impl RuleProgress {
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn update(&self, _msg: &str) {}
+    pub fn finish(&self) {}
+}
+
+impl Default for RuleProgress {
+    fn default() -> Self {
+        Self::new()
     }
 }

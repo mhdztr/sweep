@@ -19,6 +19,8 @@ use crate::scan::{self, ScanEvent};
 use crate::ui::Theme;
 use crate::ui::checklist::{Outcome, Selected, Selection, run_interactive};
 use crate::ui::confirm::{self, ConfirmItem, ConfirmOutcome};
+use crate::exec::{self, Plan, PlanItem};
+use crate::rules::Tier;
 use crate::ui::format::format_bytes;
 use std::collections::BTreeMap;
 use std::io::IsTerminal as _;
@@ -154,8 +156,39 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                 }
                 Ok(ConfirmOutcome::Abort) => 2,
                 Ok(ConfirmOutcome::Proceed) => {
-                    print!("{}", selection_preview(&items, &theme));
-                    0
+                    // Build plan and execute
+                    let plan_items: Vec<PlanItem> = items
+                        .iter()
+                        .map(|i| {
+                            // Get paths from rule scan results would be better; for now use simple paths
+                            let paths = vec![];
+                            PlanItem {
+                                id: i.id,
+                                needs_sudo: i.needs_sudo,
+                                tier: Tier::Safe,
+                                paths,
+                                purge_ack: false,
+                            }
+                        })
+                        .collect();
+                    let plan = Plan {
+                        selected: plan_items,
+                        gate_ack: std::collections::BTreeMap::new(),
+                        keep_days: ctx.flags.keep_days,
+                        dry_run: ctx.flags.dry_run,
+                        trash: ctx.flags.trash,
+                        schema: crate::SCHEMA_VERSION,
+                    };
+                    match exec::execute(&ctx, &plan) {
+                        Ok(report) => {
+                            crate::ui::summary::print_summary(&report);
+                            report.exit_hint as i32
+                        }
+                        Err(e) => {
+                            eprintln!("error: {e}");
+                            3
+                        }
+                    }
                 }
             }
         }

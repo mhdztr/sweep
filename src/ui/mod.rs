@@ -5,6 +5,7 @@ pub mod checklist;
 pub mod confirm;
 pub mod format;
 pub mod progress;
+pub mod summary;
 pub mod render;
 pub mod table;
 pub mod tty;
