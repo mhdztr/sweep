@@ -1,8 +1,4 @@
 //! State paths + UTC run id + single-instance lock.
-//!
-//! `scan` NEVER touches any of this (SAFETY §10): the lock and the state dir
-//! exist for mutating commands only (M2+). M1 implements them so the rest of
-//! the codebase has one source of truth for run ids and state paths.
 
 use std::os::fd::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
@@ -28,22 +24,20 @@ pub fn run_id_from_unix(secs: u64) -> String {
 }
 
 /// Howard Hinnant's `civil_from_days` (integer inverse of days_from_civil).
-/// `z` = days since 1970-01-01; returns (year, month, day).
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097; // [0, 146096]
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
-    let mp = (5 * doy + 2) / 153; // [0, 11] (0 = March)
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     (y + i64::from(u32::from(m <= 2)), m, d)
 }
 
-/// `SWEEP_STATE_DIR ?? {home}/.local/state/sweep` (read-only resolution;
-/// creates nothing).
+/// `SWEEP_STATE_DIR ?? {home}/.local/state/sweep`
 pub fn state_dir(home: &Path) -> PathBuf {
     match std::env::var_os("SWEEP_STATE_DIR") {
         Some(v) if !v.is_empty() => PathBuf::from(v),
@@ -53,21 +47,14 @@ pub fn state_dir(home: &Path) -> PathBuf {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LockError {
-    /// Exact CLI-UX §5 copy; `since` = HH:MM UTC (recorded timezone is UTC,
-    /// see plan §7 risk 6).
     #[error("another sweep is running (pid {pid}, since {since})")]
     Held { pid: u32, since: String },
     #[error("cannot lock {path}: {source}")]
-    Io {
-        path: PathBuf,
-        source: std::io::Error,
-    },
+    Io { path: PathBuf, source: std::io::Error },
 }
 
-/// RAII flock guard. Drop releases the lock and closes the fd.
 pub struct LockGuard {
     fd: RawFd,
-    // Owns the File so the fd stays valid for the guard's lifetime.
     _file: std::fs::File,
 }
 
@@ -79,24 +66,16 @@ impl std::fmt::Debug for LockGuard {
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        // SAFETY: `fd` is a valid open file descriptor owned by `_file`;
-        // flock(LOCK_UN) on it is safe (no pointer arguments, no aliasing
-        // concerns beyond the kernel lock itself). The file is closed when
-        // `_file` drops after this.
         unsafe {
             libc::flock(self.fd, libc::LOCK_UN);
         }
     }
 }
 
-/// MUTATING-ONLY. Creates the state dir (0700) + lock file, takes
-/// `flock(LOCK_EX|LOCK_NB)`, then writes `{pid}\n{HH:MM}\n` so a second
-/// instance can render the contention message. `scan` must never call this.
 pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
     use std::os::unix::fs::DirBuilderExt as _;
 
     let path = state_dir.join("sweep.lock");
-    // SAFETY (creation): std fs APIs, no unsafe involved, create_dir_all below.
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
@@ -117,16 +96,10 @@ pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
         })?;
     let fd = file.as_raw_fd();
 
-    // SAFETY: `fd` is a valid open descriptor owned by `file` (which outlives
-    // the guard). flock with LOCK_EX|LOCK_NB takes an advisory lock without
-    // dereferencing any pointer; a nonzero return means the lock is held by
-    // another process (or an OS error), we never dereference memory here.
     let rc = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     if rc != 0 {
         let err = std::io::Error::last_os_error();
         if err.kind() == std::io::ErrorKind::WouldBlock {
-            // Another instance holds it: read its recorded pid/HH:MM so the
-            // message names the actual holder.
             let (pid, since) = read_holder(&path);
             return Err(LockError::Held { pid, since });
         }
@@ -136,7 +109,6 @@ pub fn acquire_lock(state_dir: &Path) -> Result<LockGuard, LockError> {
         });
     }
 
-    // Record holder info (best effort, a failure here keeps the lock).
     let pid = std::process::id();
     let since = utc_hhmm_now();
     let _ = std::fs::write(&path, format!("{pid}\n{since}\n"));
@@ -164,6 +136,136 @@ fn utc_hhmm_now() -> String {
     format!("{:02}:{:02}", rem / 3600, (rem % 3600) / 60)
 }
 
+// History and logging (M2)
+
+use serde::{Deserialize, Serialize};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryItem {
+    pub id: String,
+    pub freed: u64,
+    pub removed: u64,
+    #[serde(default)]
+    pub skipped: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryRecord {
+    pub v: u32,
+    pub ts: String,
+    pub preset: String,
+    pub mode: String,
+    pub items: Vec<HistoryItem>,
+    pub freed_total: u64,
+    pub duration_ms: u64,
+    pub dry_run: bool,
+    pub trash: bool,
+}
+
+fn logs_dir_path(state_dir: &Path) -> PathBuf {
+    state_dir.join("logs")
+}
+
+fn history_file_path(state_dir: &Path) -> PathBuf {
+    state_dir.join("history.jsonl")
+}
+
+/// Write an action/audit log for a run.
+pub fn write_action_log(state_dir: &Path, run_id: &str, content: &str) -> std::io::Result<PathBuf> {
+    let dir = logs_dir_path(state_dir);
+    fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+    }
+    let path = dir.join(format!("{}.log", run_id));
+    fs::write(&path, content)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(path)
+}
+
+/// Append a history record to history.jsonl.
+pub fn append_history(state_dir: &Path, record: &HistoryRecord) -> std::io::Result<()> {
+    fs::create_dir_all(state_dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(state_dir, fs::Permissions::from_mode(0o700));
+    }
+    let path = history_file_path(state_dir);
+    let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
+    let line = serde_json::to_string(record).map_err(|e| std::io::Error::other(e))?;
+    writeln!(f, "{}", line)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+/// Prune history.jsonl to keep only the last `keep` records.
+pub fn prune_history(state_dir: &Path, keep: u32) -> std::io::Result<()> {
+    if keep == 0 {
+        return Ok(());
+    }
+    let path = history_file_path(state_dir);
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(&path)?;
+    let mut lines: Vec<String> = content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.to_string())
+        .collect();
+    if lines.len() > keep as usize {
+        let start = lines.len() - keep as usize;
+        lines.drain(0..start);
+        let new_content = lines.join("\n") + "\n";
+        fs::write(&path, new_content)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        }
+    }
+    Ok(())
+}
+
+/// Prune old log files, keeping only the last `keep` most recent.
+pub fn prune_logs(state_dir: &Path, keep: usize) -> std::io::Result<()> {
+    let dir = logs_dir_path(state_dir);
+    if !dir.exists() {
+        return Ok(());
+    }
+    let mut entries: Vec<PathBuf> = fs::read_dir(&dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("log"))
+        .collect();
+    if entries.len() <= keep {
+        return Ok(());
+    }
+    entries.sort_by_key(|p| {
+        fs::metadata(p)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+    let to_remove = entries.len() - keep;
+    for p in entries.iter().take(to_remove) {
+        let _ = fs::remove_file(p);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,12 +273,9 @@ mod tests {
     #[test]
     fn run_id_format_is_compact_utc() {
         assert_eq!(run_id_from_unix(0), "19700101T000000");
-        // Known epochs (civil_from_days spot checks):
         assert_eq!(run_id_from_unix(86_400), "19700102T000000");
         assert_eq!(run_id_from_unix(1_704_067_200), "20240101T000000");
-        // Leap-year civil-from-days: 2024-02-29 = 19782 days after epoch.
         assert_eq!(run_id_from_unix(19_782 * 86_400), "20240229T000000");
-        // End of leap year boundary.
         assert_eq!(
             run_id_from_unix(19_783 * 86_400 + 3_600 + 60 + 5),
             "20240301T010105"

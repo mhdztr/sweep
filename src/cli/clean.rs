@@ -157,15 +157,22 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                 Ok(ConfirmOutcome::Abort) => 2,
                 Ok(ConfirmOutcome::Proceed) => {
                     // Build plan and execute
+                    let mut tier_map = std::collections::BTreeMap::new();
+                    let mut path_map: std::collections::BTreeMap<&str, Vec<std::path::PathBuf>> = std::collections::BTreeMap::new();
+                    for r in &out.results {
+                        tier_map.insert(r.id, r.tier);
+                        // Use samples as deletion targets for now
+                        path_map.insert(r.id, r.info.samples.clone());
+                    }
                     let plan_items: Vec<PlanItem> = items
                         .iter()
                         .map(|i| {
-                            // Get paths from rule scan results would be better; for now use simple paths
-                            let paths = vec![];
+                            let paths = path_map.get(i.id).cloned().unwrap_or_default();
+                            let tier = tier_map.get(i.id).cloned().unwrap_or(Tier::Safe);
                             PlanItem {
                                 id: i.id,
                                 needs_sudo: i.needs_sudo,
-                                tier: Tier::Safe,
+                                tier,
                                 paths,
                                 purge_ack: false,
                             }

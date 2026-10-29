@@ -5,7 +5,9 @@
 use crate::ctx::Ctx;
 use crate::rules::Tier;
 use crate::state;
+use crate::ui::progress::RuleProgress;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -90,8 +92,17 @@ pub mod del;
 pub mod sudo;
 pub mod trash;
 
+fn chrono_like_ts() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{}Z", state::run_id_from_unix(secs))
+}
+
 pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
     let start = std::time::Instant::now();
+    let run_id = state::run_id_now();
     // Acquire lock for mutating runs
     let _lock = if !plan.dry_run {
         Some(
@@ -102,17 +113,39 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
         None
     };
 
+    let progress = RuleProgress::new(!ctx.flags.quiet && std::io::stderr().is_terminal(), ctx.flags.unicode);
+
     let mut items: Vec<ItemReport> = Vec::new();
     let mut freed_total: u64 = 0;
     let mut has_error = false;
 
     for item in &plan.selected {
+        progress.start_rule(item.id);
         if item.needs_sudo {
+            progress.finish_rule(item.id, true);
             continue;
         }
         if plan.dry_run {
-            // Dry-run: print samples up to 20
+            // Dry-run: print samples up to 20 + argv per rule (no sh -c)
             eprintln!("dry-run: {} ({} paths)", item.id, item.paths.len());
+            let mut samples_shown = 0;
+            for p in &item.paths {
+                if samples_shown >= 20 {
+                    break;
+                }
+                eprintln!("  sample: {}", p.display());
+                samples_shown += 1;
+            }
+            if !item.paths.is_empty() {
+                let mut argv_parts = vec!["rm".to_string(), "-rf".to_string()];
+                for p in item.paths.iter().take(3) {
+                    argv_parts.push(p.display().to_string());
+                }
+                if item.paths.len() > 3 {
+                    argv_parts.push(format!("... (+{} more)", item.paths.len() - 3));
+                }
+                eprintln!("  argv: {}", argv_parts.join(" "));
+            }
             items.push(ItemReport {
                 id: item.id,
                 freed: 0,
@@ -120,13 +153,16 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
                 skipped: vec!["dry-run".to_string()],
                 errors: vec![],
             });
+            progress.finish_rule(item.id, true);
             continue;
         }
         // Execute deletion
         match crate::exec::del::remove_items(ctx, item, plan.trash) {
             Ok(r) => {
                 freed_total += r.freed;
+                let ok = r.errors.is_empty();
                 items.push(r);
+                progress.finish_rule(item.id, ok);
             }
             Err(e) => {
                 has_error = true;
@@ -137,15 +173,70 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
                     skipped: vec![],
                     errors: vec![e.to_string()],
                 });
+                progress.finish_rule(item.id, false);
             }
         }
     }
 
+    progress.finish();
+    let duration = start.elapsed();
     let exit_hint = if has_error { ExitCode::ExecErr } else { ExitCode::Ok };
+
+    let state_dir_path = state::state_dir(&ctx.home);
+    let mut log_content = String::new();
+    let _ = writeln!(log_content, "run_id: {}", run_id);
+    let _ = writeln!(log_content, "preset: {}", ctx.preset_name());
+    let _ = writeln!(log_content, "dry_run: {}", plan.dry_run);
+    let _ = writeln!(log_content, "freed_total: {}", freed_total);
+    for it in &items {
+        let _ = writeln!(
+            log_content,
+            "item: {} freed={} removed={} skipped={} errors={}",
+            it.id,
+            it.freed,
+            it.removed,
+            it.skipped.len(),
+            it.errors.len()
+        );
+        for s in &it.skipped {
+            let _ = writeln!(log_content, "  skip: {}", s);
+        }
+        for e in &it.errors {
+            let _ = writeln!(log_content, "  error: {}", e);
+        }
+    }
+    let _ = state::write_action_log(&state_dir_path, &run_id, &log_content);
+    let _ = state::prune_logs(&state_dir_path, 30);
+
+    let history_items: Vec<state::HistoryItem> = items
+        .iter()
+        .map(|it| state::HistoryItem {
+            id: it.id.to_string(),
+            freed: it.freed,
+            removed: it.removed,
+            skipped: it.skipped.clone(),
+        })
+        .collect();
+    let ts = chrono_like_ts();
+    let record = state::HistoryRecord {
+        v: 1,
+        ts,
+        preset: ctx.preset_name().to_string(),
+        mode: "interactive".to_string(),
+        items: history_items,
+        freed_total,
+        duration_ms: duration.as_millis() as u64,
+        dry_run: plan.dry_run,
+        trash: plan.trash,
+    };
+    let _ = state::append_history(&state_dir_path, &record);
+    let keep = ctx.config.general.history_keep_runs;
+    let _ = state::prune_history(&state_dir_path, if keep == 0 { 50 } else { keep });
+
     Ok(RunReport {
         items,
         freed_total,
-        duration: start.elapsed(),
+        duration,
         exit_hint,
         sudo_pass: SudoPassReport {
             declined: false,
@@ -154,3 +245,4 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
         },
     })
 }
+use std::io::IsTerminal as _;
