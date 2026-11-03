@@ -42,13 +42,15 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 > `FORCE_COLOR` / `TERM=dumb` (resolved by `should_color()`, see
 > `docs/ARCHITECTURE.md` §7 and the env table in CLI-UX §7).
 
-> **M2 note: `sweep clean` is wired up with the P1 summary gate.**
-> No args and `clean` both run the §3 checklist, then show the P1 summary gate
-> (`ui/confirm.rs`) before proceeding. `--only`/`--exclude`
-> filter scan results before the checklist (exclude wins) and reject unknown
-> ids with the §5 error. `--json` and `--no-prompt` are refused on this path
-> until their non-interactive flow exists; `--dry-run`, `--trash` and `--yes`
-> are accepted but inert here.
+> **M2 note: `sweep clean` executes the four implemented safe rules.**
+> Interactive runs show the §3 checklist and P1 summary gate (`ui/confirm.rs`)
+> before proceeding. `--yes` or `--no-prompt` selects the current preset
+> without a TTY and executes the safe plan. `--only`/`--exclude` filter scan
+> results before selection (exclude wins) and reject unknown ids with the §5
+> error. `--dry-run` prints candidate samples and argv-shaped operations
+> without changing files or state. `--json` and `--trash` remain refused until
+> their complete flows exist; destructive and sudo rules remain unavailable in
+> this M2 slice.
 
 Hidden internal: `--internal-system-pass <PLAN_PATH>` (documented in SAFETY §7).
 
@@ -110,35 +112,36 @@ sweep clean --preset safe --yes          # scripted
 sweep clean --only tmp,trash --dry-run
 ```
 
-**Flow steps:** header → scan progress → checklist (§3) → gate(s) (§4) → execution
-progress → summary card (§2.2b) → history append.
+**Interactive flow:** header → scan progress → checklist (§3) → P1 gate (§4) →
+execution progress → summary card (§2.2b) → history append.
+**Scripted safe flow:** header → scan progress → preset selection → execution
+progress → summary card → history append.
 
 > **Implementation status:** the interactive path runs the §3 checklist, then
 > the P1 summary gate (`ui/confirm.rs`) using raw mode with signal handling.
 > Only literal `y`/`Y` proceeds; Enter, Esc, `q`/`Q`, Ctrl-C, EOF, or any other
-> input aborts with `aborted, nothing was deleted` (exit 2). After acceptance,
-> `clean` prints `selected <N> categories | <bytes> would be deleted
-> (preview only; nothing deleted yet)` followed by one `  - <rule id>  <size>`
-> line per selected rule (`  [sudo]` marks system rules), then exits 0. An empty
-> accept prints `nothing selected, exiting` (exit 0) and abort prints
-> `aborted, nothing was deleted` (exit 2). No `Plan`, execution, history write,
-> `--trash` or `--dry-run` sample printing exists yet; `--json` and `--no-prompt`
-> are refused (exit 1). `--only`/`--exclude` are applied to the scan results
-> before `Selection::new` and validated against the rule registry
-> (`error: unknown rule '<id>'`, exit 1).
+> input aborts with `aborted, nothing was deleted` (exit 2). Scripted safe mode
+> (`--yes` or `--no-prompt`) skips the TTY and P1 prompt, takes preset-selected
+> safe rows, and executes them. Both paths build a plan from full eligible scan
+> candidates, not the 20 display samples, and write a summary plus history/logs
+> for a real run. `--dry-run` prints up to 20 candidates per rule and an
+> argv-shaped preview, then leaves the filesystem and state unchanged. An empty
+> selection prints `nothing selected, exiting` (exit 0); clean JSON and `--trash`
+> remain refused (exit 1); destructive and sudo items are rejected by plan
+> validation. `--only`/`--exclude` are applied before `Selection::new` and
+> validated against the registry (`error: unknown rule '<id>'`, exit 1).
 
 #### 2.2b Summary card (every clean run)
 ```
-  ╭──────────────────────────────────────────────────────╮
-  │  [x] freed 13.3 GiB in 8.2s                         │
-  │     cleaned: 7 · skipped: 1 (firefox running)       │
-  │     errors:  0                                      │
-  │     log: ~/.local/state/sweep/logs/20261019T140311  │
-  ╰──────────────────────────────────────────────────────╯
+  +----------------------------------------------------------+
+  |  clean completed                                        |
+  |  freed: 13.3 GiB in 8.2s                                |
+  |  cleaned: 7  skipped: 1  errors: 0                      |
+  +----------------------------------------------------------+
 ```
-Variants: partial failure adds `warn 2 errors (see log)` (exit 3); aborted gate adds
-`aborted, nothing was deleted` (exit 2); dry-run adds `dry run, nothing changed`;
-trash mode adds `moved to trash; empty trash to actually free the space`.
+Variants: partial failure uses `completed with errors` (exit 3); dry-run uses
+`dry run, nothing changed`; gate aborts use `aborted, nothing was deleted` (exit
+2). Trash mode is currently refused.
 
 ### 2.3 `sweep top`
 **Purpose:** biggest dirs/files report (decision support).

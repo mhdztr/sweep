@@ -142,6 +142,7 @@ struct ScanInfo {
     dirs: u64,
     newest_age: Option<Duration>,     // None if empty
     samples: Vec<PathBuf>,            // first N (for dry-run/preview)
+    candidates: Vec<PathBuf>,         // clean-only eligible files/symlinks
     note: Option<String>,             // e.g. "kept 2 versions", "310 pkgs"
 }
 
@@ -190,15 +191,15 @@ main:
             ui::summary(report); exit(report.exit_hint)
 ```
 
-**M2 wiring status (R13):** `Commands::Clean` now runs the real path up to and
-including the checklist. Concretely: `scan::run` -> `--only`/`--exclude` filter
-(validated against `rules::registry()` before scanning) -> `Selection::new` ->
-`ui::checklist::run_interactive`. An accepted selection is printed by the pure
-`selection_preview` helper and the process exits 0; it is **not** turned into a
-`Plan` and nothing is executed. Abort is exit 2, empty accept is exit 0, and
-stdin without a TTY is exit 1. `--json` and `--no-prompt` are refused because
-the scripted/non-interactive branch does not exist yet. No lock is taken
-(read-only slice).
+**M2 wiring status:** `Commands::Clean` runs `scan::run_with_candidates` ->
+`--only`/`--exclude` filter (validated against `rules::registry()` before
+scanning) -> `Selection::new`. Interactive mode then runs the checklist and P1
+gate; scripted mode (`--yes`/`--no-prompt`) takes preset-selected safe rows
+without a TTY. Selected rows become a `Plan` from full eligible candidate paths,
+then execute sequentially or stop at dry-run. Real runs lock, delete, write an
+action log, append history, and print a summary. Abort is exit 2, empty accept
+is exit 0, and execution errors return exit 3. Clean JSON, trash mode,
+destructive rules, and sudo items remain deferred.
 
 **Clean flow detail:**
 
@@ -294,10 +295,12 @@ walk(root):
 
 1. **Order:** user pass order = rule registration order (stable, docs-listed);
    system pass = same, appended after (so output groups "user" then "system").
-2. **Deletion primitives** (`exec/del.rs`): `remove_tree(path, protected)`,
-   bottom-up, never following symlinks, refusing `/`, refusing anything not under
-   an allowed prefix (double-check at execute time, independent of plan), on same-fs
-   dirs uses `rename` to a temp name first then unlinks (best-effort atomicity).
+2. **Deletion primitives** (`exec/del.rs`): the M2 safe pass unlinks only
+   candidate files and symlinks, never follows symlinks, refuses `/`, hardcoded
+   user-data/Downloads roots, protected tmp components, special files, and
+   anything outside an allowed prefix. These checks are independent of the plan.
+   Recursive directory deletion and rename-then-unlink remain future work for
+   rules whose semantics can prove that every descendant is eligible.
 3. **Dry-run printing:** per rule → up to 20 sample paths (`+ 4,210 more`), total
    bytes/files, and external command argv that would run.
 4. **Trash mode:** `--trash` moves deletable top-level entries into
@@ -516,7 +519,8 @@ exit ≠ 0. `-v` adds per-rule argv + errno context.
 | `dev-artifacts` full home (SSD) | < 30 s with progress | single walk, matching dir names at any depth, mount-bounded, exclude_paths |
 | checklist toggle feedback | < 16 ms | totals precomputed per rule |
 | startup (arg parse → header) | < 100 ms | lazy: system detect only after header; doctor does full detect |
-| memory during scan | O(depth × threads) | no per-file retention beyond samples (N=20/rule) |
+| memory during ordinary scan | O(depth × threads) | no per-file retention beyond samples (N=20/rule) |
+| memory during clean scan | O(candidate files) | candidate capture is opt-in and used only to build a safe file-level plan |
 
 ## 16. Testing architecture
 

@@ -9,11 +9,11 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
 > what works today. **`sweep scan` works** (M1: read-only measurement, table +
-> `--json`). **`sweep clean` is wired up to the interactive checklist** (M2):
-> it scans, lets you toggle rows, shows a **P1 summary (default cancel)**
-> after selection, and prints the accepted selection as a preview; it does not
-> delete anything yet (no exec/lock/history). `top`, `history`, `doctor` are
-> still milestone stubs. Core commands land milestone by milestone.
+> `--json`). **`sweep clean` executes the four implemented safe rules** (M2):
+> interactive runs use the checklist and P1 summary gate; `--yes`/`--no-prompt`
+> runs are scripted and safe for pipes; `--dry-run` prints candidate samples and
+> argv-shaped operations without changing files. Destructive rules, trash mode,
+> sudo, clean JSON, `top`, `history`, and `doctor` remain milestone work.
 
 ## Why
 

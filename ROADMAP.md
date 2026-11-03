@@ -131,25 +131,29 @@ Tasks:
       `apply_key` in `ui/checklist.rs`. In R9/R10 this core and renderer were
       library-only (D14/D15): `Commands::Clean` was still the `not_yet` stub, so
       nothing reached the CLI yet. Slice 3 (R13) closed that: `Commands::Clean`
-      now calls `run_interactive` and stops at the accepted-selection preview
-      (exit 0, no deletion, no lock). `--only`/`--exclude` filter scan results and
-      are registry-validated; `--json` and `--no-prompt` are refused until the
-      scripted flow exists. Remaining: the P1 summary and the `ui/confirm.rs`
-      gates it implies, plus the `exec/` connection.
+       now calls `run_interactive`, or a preset-selected scripted flow for
+       `--yes`/`--no-prompt`. The four implemented safe rules build plans from
+       full eligible candidates and execute after P1 (or directly in scripted
+       mode); `--only`/`--exclude` filter scan results and are registry-validated.
+       Clean `--json`, trash, destructive, sudo, and the remaining safe rules are
+       still deferred.
 - [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection
       preview over safe+caution+destructive, no destructive run happens before M4)
 - [x] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths (raw mode, signal handling, only `y`/`Y` proceeds, Esc/`q`/Ctrl-C/Enter/EOF abort)
-- [ ] `exec/`: `del.rs` primitives (bottom-up, no-follow, prefix re-check, hot-skip),
-      plan execution sequential, continue-on-error, per-rule Report
-- [ ] Dry-run printing (samples + argv), `--yes` (safe/caution only)
-- [ ] `ui/progress.rs` per-rule bars + `ui/summary.rs` card
+- [~] `exec/`: M2 safe file/symlink primitives (no-follow, never-touch and prefix
+      re-check), plan validation, sequential execution, continue-on-error, and
+      per-rule report are implemented. Recursive deletion, hot/open-fd guards,
+      and sudo remain for later slices.
+- [x] Dry-run printing (up to 20 candidates + argv) and scripted `--yes`/`--no-prompt`
+      for the implemented safe rules
+- [x] `ui/progress.rs` per-rule progress + `ui/summary.rs` card
 - [ ] Remaining safe rules: `journal-user`, `browser-cache`(+guard), `editor-cache`(+guard),
       `tool-caches` (all 12 tool paths), `app-caches`, `log-rotate`, `xdg-state-junk`
       (coredump sub-row default-off)
 - [ ] `system/proc.rs`: comm guards + injectable /proc for tests; open-fd scan for tmp
-- [ ] State: action log writer + `history.jsonl` append + pruning
+- [x] State: action log writer + `history.jsonl` append + pruning for mutating runs
 - [ ] Exit codes 0/1/2/3 wired everywhere; `--trash` (exec/trash.rs) implemented
 - [ ] Tests per safe rule (detect/scan/clean/age/guard) + gate tests (P1 abort,
       --yes boundaries) + checklist keybinding logic tests (renderer-agnostic core)

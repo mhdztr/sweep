@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M2 safe clean execution slice:**
+  - `sweep clean --yes` and `--no-prompt` execute preset-selected safe rules
+    without requiring a TTY.
+  - Clean plans use full eligible scan candidates instead of display samples;
+    dry-run prints bounded samples and argv-shaped operations without mutation.
+  - Safe file/symlink execution re-checks allowed prefixes, never-touch roots,
+    protected tmp components, and special files; real runs write an action log
+    and schema-v1 history record.
+  - Added execution, mutation, state, and scripted CLI tests.
+
 - **M1.5, repo hardening + CI/CD foundation (infra only, no `sweep` behavior
   change):**
   - `ci.yml` restructured into `fmt`, `clippy`, `test`, `doctest`, `docs`,
@@ -34,8 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `cargo auditable` metadata survives; milestone-commented cargo-machete
     ignores.
 
-Nothing user-visible changed: `sweep` behavior, CLI output, and tests are
-identical to the M1 state.
+The M2 execution slice is still pre-alpha: remaining safe rules, trash, clean
+JSON, destructive gates, sudo, and the history viewer are not implemented.
 
 ### Notes
 
