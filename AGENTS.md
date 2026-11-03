@@ -76,3 +76,28 @@ Done for every milestone is at the top of that file.
 - Env-var tests must serialize (process-global), use the `ENV_LOCK` pattern from
   `src/env.rs`.
 - Never require sudo or network in tests.
+
+## Mandatory delivery gate
+
+Before reporting a change as complete, run every applicable check below from the
+repository root and report the actual result. A skipped or unavailable command is
+not a pass:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-targets --locked
+cargo test --doc --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --locked
+cargo build --release --locked
+cargo run -- --version
+cargo test --test cli_smoke --locked
+```
+
+Run applicable repository tooling when installed: `cargo deny check`,
+`cargo machete`, `actionlint`, and `typos`. Before delivery, review the complete
+diff for correctness, regressions, dependency bloat, and the `docs/SAFETY.md`
+checklist. Never claim a check passed unless it was run in the current session.
+
+Commits use the required prefixes `docs:`, `fix:`, `feat:`, `chore:`, or
+`view:`. Pushes are always left to the maintainer.
