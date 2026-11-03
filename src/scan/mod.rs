@@ -23,6 +23,8 @@ pub struct ScanInfo {
     pub newest_age: Option<Duration>,
     /// ≤ 20.
     pub samples: Vec<PathBuf>,
+    /// Counted file and symlink paths captured only for clean planning.
+    pub candidates: Vec<PathBuf>,
     /// e.g. "1 newer than keep-days kept" | "(excl. thumbnails)", human
     /// table only (parenthesization happens in the renderer).
     pub note: Option<String>,
@@ -45,6 +47,7 @@ impl ScanInfo {
                 self.samples.push(s);
             }
         }
+        self.candidates.extend(other.candidates);
         if self.note.is_none() {
             self.note = other.note;
         }
@@ -78,6 +81,9 @@ pub struct ScanService {
     pub pool: Arc<rayon::ThreadPool>,
     /// Captured ONCE per run (consistent age cutoffs).
     pub now: SystemTime,
+    /// Capture eligible file paths for a clean plan; ordinary scans keep only
+    /// bounded preview samples.
+    pub capture_candidates: bool,
 }
 
 #[derive(Debug)]
@@ -120,6 +126,16 @@ pub fn run(
     cancel: Arc<AtomicBool>,
     events: Option<mpsc::Sender<ScanEvent>>,
 ) -> ScanOutput {
+    run_with_candidates(ctx, cancel, events, false)
+}
+
+/// Run the full scan with optional candidate capture for `clean` planning.
+pub fn run_with_candidates(
+    ctx: &Ctx,
+    cancel: Arc<AtomicBool>,
+    events: Option<mpsc::Sender<ScanEvent>>,
+    capture_candidates: bool,
+) -> ScanOutput {
     let started = SystemTime::now();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(
@@ -140,6 +156,7 @@ pub fn run(
         events,
         pool: Arc::new(pool),
         now: SystemTime::now(),
+        capture_candidates,
     };
 
     let registry = crate::rules::registry();
@@ -271,12 +288,20 @@ pub fn run(
         .iter()
         .find(|r| r.id == "thumbnails")
         .map(|r| (r.applied, r.info.bytes, r.info.files, r.info.dirs));
+    let thumbnail_candidates: std::collections::BTreeSet<PathBuf> = results
+        .iter()
+        .find(|r| r.id == "thumbnails")
+        .map(|r| r.info.candidates.iter().cloned().collect())
+        .unwrap_or_default();
     if let Some(uc) = results.iter_mut().find(|r| r.id == "user-cache")
         && let Some((true, tb, tf, td)) = thumbs
     {
         uc.info.bytes = uc.info.bytes.saturating_sub(tb);
         uc.info.files = uc.info.files.saturating_sub(tf);
         uc.info.dirs = uc.info.dirs.saturating_sub(td);
+        uc.info
+            .candidates
+            .retain(|path| !thumbnail_candidates.contains(path));
         uc.net_of = vec!["thumbnails"];
         uc.info.note = Some("(excl. thumbnails)".to_string());
     }

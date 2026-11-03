@@ -48,6 +48,7 @@ impl Rule for TrashRule {
             }
             let opts = WalkOptions {
                 max_samples: 20,
+                capture_candidates: svc.capture_candidates,
                 cancel: svc.cancel.clone(),
                 progress: svc.events.clone(),
                 prune: None,
@@ -77,6 +78,7 @@ impl Rule for TrashRule {
                     .newest
                     .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: total.samples,
+                candidates: total.candidates,
                 note: None,
             },
             skipped: total.skipped,

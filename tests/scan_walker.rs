@@ -34,6 +34,26 @@ fn old() -> filetime::FileTime {
 }
 
 #[test]
+fn candidate_capture_is_opt_in_and_excludes_directories() {
+    let root = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir_all(root.path().join("nested")).expect("mkdir");
+    let file = root.path().join("nested/file");
+    std::fs::write(&file, b"data").expect("write");
+
+    let stats = walk(root.path(), &opts()).expect("ordinary walk");
+    assert!(stats.candidates.is_empty(), "ordinary scans stay lightweight");
+
+    let mut candidate_opts = opts();
+    candidate_opts.capture_candidates = true;
+    let stats = walk(root.path(), &candidate_opts).expect("candidate walk");
+    assert_eq!(stats.candidates, vec![file]);
+    assert!(
+        stats.samples.iter().any(|p| p.ends_with("nested")),
+        "directory remains available for preview samples"
+    );
+}
+
+#[test]
 fn symlink_to_file_counted_zero_bytes_target_not_followed() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let outside = tempfile::tempdir().expect("outside");

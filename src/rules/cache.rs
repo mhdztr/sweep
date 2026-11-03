@@ -67,6 +67,7 @@ impl Rule for UserCacheRule {
         let root = ctx.home.join(".cache");
         let opts = WalkOptions {
             max_samples: 20,
+            capture_candidates: svc.capture_candidates,
             cancel: svc.cancel.clone(),
             progress: svc.events.clone(),
             prune: Some(prune),
@@ -85,6 +86,7 @@ impl Rule for UserCacheRule {
                     .newest
                     .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: stats.samples,
+                candidates: stats.candidates,
                 note: None,
             },
             skipped: stats.skipped,
@@ -127,6 +129,7 @@ impl Rule for ThumbnailsRule {
         let root = ctx.home.join(".cache/thumbnails");
         let opts = WalkOptions {
             max_samples: 20,
+            capture_candidates: svc.capture_candidates,
             cancel: svc.cancel.clone(),
             progress: svc.events.clone(),
             prune: None,
@@ -145,6 +148,7 @@ impl Rule for ThumbnailsRule {
                     .newest
                     .map(|n| svc.now.duration_since(n).unwrap_or_default()),
                 samples: stats.samples,
+                candidates: stats.candidates,
                 note: None,
             },
             skipped: stats.skipped,

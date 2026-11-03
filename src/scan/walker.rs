@@ -98,6 +98,9 @@ pub struct StatInfo {
 #[derive(Clone)]
 pub struct WalkOptions {
     pub max_samples: usize,
+    /// Keep every counted file/symlink path for a clean plan. Ordinary scans
+    /// leave this false so they retain only the bounded preview samples.
+    pub capture_candidates: bool,
     /// Checked per directory (listing) AND per entry (consume).
     pub cancel: Arc<AtomicBool>,
     pub progress: Option<mpsc::Sender<ScanEvent>>,
@@ -118,6 +121,7 @@ impl WalkOptions {
     pub fn new(pool: Arc<rayon::ThreadPool>) -> Self {
         WalkOptions {
             max_samples: 20,
+            capture_candidates: false,
             cancel: Arc::new(AtomicBool::new(false)),
             progress: None,
             prune: None,
@@ -140,6 +144,10 @@ pub struct WalkStats {
     /// itself is counted (dirs) but never sampled, samples preview
     /// reclaimable content.
     pub samples: Vec<PathBuf>,
+    /// Counted file and symlink paths for an opt-in clean plan. Directories are
+    /// intentionally excluded so execution never recursively removes a path
+    /// whose descendants may have been filtered by an age or overlap rule.
+    pub candidates: Vec<PathBuf>,
     pub skipped: BTreeMap<SkipKind, u64>,
     /// Per-entry stat/read failures (entry skipped, walk continues).
     pub errors: u64,
@@ -165,6 +173,7 @@ impl WalkStats {
                 self.samples.push(s);
             }
         }
+        self.candidates.extend(other.candidates);
         for (k, v) in other.skipped {
             *self.skipped.entry(k).or_insert(0) += v;
         }
@@ -457,6 +466,11 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         }
         if info.depth > 0 && stats.samples.len() < opts.max_samples {
             stats.samples.push(entry.path());
+        }
+        if opts.capture_candidates
+            && matches!(info.kind, EntryKind::File | EntryKind::Symlink)
+        {
+            stats.candidates.push(entry.path());
         }
         if counted.is_multiple_of(256)
             && let Some(tx) = &opts.progress

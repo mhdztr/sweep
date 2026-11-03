@@ -123,6 +123,7 @@ impl Rule for TmpRule {
             }
             let opts = WalkOptions {
                 max_samples: 20,
+                capture_candidates: svc.capture_candidates,
                 cancel: svc.cancel.clone(),
                 progress: svc.events.clone(),
                 prune: Some(prune.clone()),
@@ -154,6 +155,7 @@ impl Rule for TmpRule {
                     .newest
                     .map(|n| now.duration_since(n).unwrap_or_default()),
                 samples: total.samples,
+                candidates: total.candidates,
                 note: None, // set by scan::run (needs skipped[KeptNewer] + keep_days)
             },
             skipped: total.skipped,

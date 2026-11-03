@@ -35,6 +35,7 @@ fn svc() -> ScanService {
                 .expect("pool"),
         ),
         now: SystemTime::now(),
+        capture_candidates: false,
     }
 }
 
