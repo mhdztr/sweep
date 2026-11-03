@@ -467,9 +467,7 @@ pub fn walk(root: &Path, opts: &WalkOptions) -> Result<WalkStats, ScanError> {
         if info.depth > 0 && stats.samples.len() < opts.max_samples {
             stats.samples.push(entry.path());
         }
-        if opts.capture_candidates
-            && matches!(info.kind, EntryKind::File | EntryKind::Symlink)
-        {
+        if opts.capture_candidates && matches!(info.kind, EntryKind::File | EntryKind::Symlink) {
             stats.candidates.push(entry.path());
         }
         if counted.is_multiple_of(256)
