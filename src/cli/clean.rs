@@ -1,26 +1,22 @@
-//! `sweep clean`: scan, interactive checklist, P1 gate, accepted-selection preview.
+//! `sweep clean`: scan, selection, P1 gate, safe execution, and reporting.
 //! Spec: `docs/CLI-UX.md` sections 1/2.2/3/4/5/6; gates: `docs/SAFETY.md` section 2.
 //!
-//! Flow: scan -> `Selection` -> `run_interactive` -> P1 `confirm_p1` (raw mode,
-//! signal-safe, only `y`/`Y` proceeds) -> print accepted selection or abort.
-//! It performs ZERO mutations and takes NO lock (SAFETY section 10: the lock is
-//! for mutating runs only).
+//! Flow: scan -> `Selection` -> P1 `confirm_p1` (interactive) or preset-selected
+//! scripted rows -> candidate-backed plan -> dry-run or safe execution.
 //!
 //! Deliberately deferred (all still M2/M4 tasks):
-//! - `exec/` deletion, `Plan`, dry-run sample/argv printing, `--trash`,
-//!   history/log writes, the batched sudo pass and exit code 3;
+//! - remaining safe rules, `--trash`, destructive PURGE gates, the batched sudo
+//!   pass, clean JSON output, and the history viewer;
 //! - `--json` for clean (JSON-SCHEMAS section 12, M6 per ROADMAP.md:239);
-//! - `--no-prompt`, which needs the scripted `--yes` flow and `exec/`, so it is
-//!   refused here instead of being silently ignored.
+//! - destructive and sudo execution, which are refused by the M2 plan validator.
 
 use crate::cli::Root;
 use crate::ctx::Ctx;
+use crate::exec::{self, Plan, PlanItem};
 use crate::scan::{self, ScanEvent};
 use crate::ui::Theme;
 use crate::ui::checklist::{Outcome, Selected, Selection, run_interactive};
 use crate::ui::confirm::{self, ConfirmItem, ConfirmOutcome};
-use crate::exec::{self, Plan, PlanItem};
-use crate::rules::Tier;
 use crate::ui::format::format_bytes;
 use std::collections::BTreeMap;
 use std::io::IsTerminal as _;
@@ -41,9 +37,8 @@ pub const EMPTY_SELECTION_COPY: &str = "nothing selected, exiting";
 /// SAFETY section 2 / CLI-UX section 6: abort copy (stderr, exit 2), nothing was deleted.
 pub const ABORT_COPY: &str = "aborted, nothing was deleted";
 
-/// This slice has no non-interactive flow yet, so `--no-prompt` is refused.
-pub const NO_PROMPT_REFUSAL_COPY: &str =
-    "error: --no-prompt requires the non-interactive flow (not implemented yet)";
+/// Marker copy used by tests and future scripted-flow diagnostics.
+pub const SCRIPTED_MODE_COPY: &str = "scripted mode selects safe and caution rules";
 
 pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> i32 {
     let ctx = match Ctx::build(&root) {
@@ -54,26 +49,15 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
         }
     };
 
-    // CLI-UX section 1/section 5: fail fast, before any scan or raw-mode setup. Same
-    // predicate as `tty::RawMode::enter` (`isatty` on fd 0); the NotConnected
-    // mapping below is a belt-and-braces fallback if stdin closes between this
-    // preflight and the loop.
-    if !std::io::stdin().is_terminal() {
+    let scripted = no_prompt || ctx.flags.yes;
+    if !scripted && !std::io::stdin().is_terminal() {
         eprintln!("{NO_TTY_COPY}");
         return 1;
     }
 
-    // CLI-UX section 5: `--json` is refused for the interactive flow. There is no
-    // non-interactive flow in this slice, so any `--json` on clean lands here.
+    // Clean JSON output is deferred until the complete clean report schema.
     if ctx.flags.json {
         eprintln!("{JSON_REFUSAL_COPY}");
-        return 1;
-    }
-
-    // `--no-prompt` is the scripted flow (implies `--yes`); that needs the
-    // gates and `exec/`, so refuse it rather than ignoring it.
-    if no_prompt {
-        eprintln!("{NO_PROMPT_REFUSAL_COPY}");
         return 1;
     }
 
@@ -94,15 +78,14 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
         show_spinner,
         ctx.flags.unicode,
     );
-    let mut out = scan::run(&ctx, cancel, Some(tx));
+    let mut out = scan::run_with_candidates(&ctx, cancel, Some(tx), true);
     let _ = spinner.join();
 
     // Option (A): filter the scan results BEFORE building the selection.
     // `exclude` wins over `only` (CLI-UX section 2.2).
     out.results.retain(|r| keep_rule(r.id, only, exclude));
 
-    // `system/proc.rs` does not exist yet, so no guard is held in this slice
-    // (docs/SAFETY.md section 5). `--yes` is inert on the checklist by design.
+    // `system/proc.rs` does not exist yet, so no guard is held in this slice.
     let guards: BTreeMap<&str, String> = BTreeMap::new();
     let theme = Theme {
         color: ctx.flags.color,
@@ -115,6 +98,15 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
         ctx.flags.i_know_what_im_doing,
         &guards,
     );
+
+    if scripted {
+        let items = sel.selected();
+        if items.is_empty() {
+            println!("{EMPTY_SELECTION_COPY}");
+            return 0;
+        }
+        return execute_selected(&ctx, &out.results, &items);
+    }
 
     match run_interactive(&mut sel, &theme) {
         Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
@@ -155,49 +147,30 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                     1
                 }
                 Ok(ConfirmOutcome::Abort) => 2,
-                Ok(ConfirmOutcome::Proceed) => {
-                    // Build plan and execute
-                    let mut tier_map = std::collections::BTreeMap::new();
-                    let mut path_map: std::collections::BTreeMap<&str, Vec<std::path::PathBuf>> = std::collections::BTreeMap::new();
-                    for r in &out.results {
-                        tier_map.insert(r.id, r.tier);
-                        // Use samples as deletion targets for now
-                        path_map.insert(r.id, r.info.samples.clone());
-                    }
-                    let plan_items: Vec<PlanItem> = items
-                        .iter()
-                        .map(|i| {
-                            let paths = path_map.get(i.id).cloned().unwrap_or_default();
-                            let tier = tier_map.get(i.id).cloned().unwrap_or(Tier::Safe);
-                            PlanItem {
-                                id: i.id,
-                                needs_sudo: i.needs_sudo,
-                                tier,
-                                paths,
-                                purge_ack: false,
-                            }
-                        })
-                        .collect();
-                    let plan = Plan {
-                        selected: plan_items,
-                        gate_ack: std::collections::BTreeMap::new(),
-                        keep_days: ctx.flags.keep_days,
-                        dry_run: ctx.flags.dry_run,
-                        trash: ctx.flags.trash,
-                        schema: crate::SCHEMA_VERSION,
-                    };
-                    match exec::execute(&ctx, &plan) {
-                        Ok(report) => {
-                            crate::ui::summary::print_summary(&report);
-                            report.exit_hint as i32
-                        }
-                        Err(e) => {
-                            eprintln!("error: {e}");
-                            3
-                        }
-                    }
-                }
+                Ok(ConfirmOutcome::Proceed) => execute_selected(&ctx, &out.results, &items),
             }
+        }
+    }
+}
+
+fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected]) -> i32 {
+    if ctx.flags.trash {
+        eprintln!("error: --trash not implemented in this build");
+        return 1;
+    }
+    let plan = Plan {
+        selected: build_plan_items(items, results),
+        gate_ack: std::collections::BTreeMap::new(),
+        keep_days: Some(ctx.keep_days()),
+        dry_run: ctx.flags.dry_run,
+        trash: ctx.flags.trash,
+        schema: crate::SCHEMA_VERSION,
+    };
+    match exec::execute(ctx, &plan) {
+        Ok(report) => report.exit_hint as i32,
+        Err(e) => {
+            eprintln!("error: {e}");
+            3
         }
     }
 }
@@ -258,6 +231,25 @@ pub fn selection_preview(items: &[Selected], _theme: &Theme) -> String {
     out
 }
 
+/// Build an execution plan from the scan's full eligible candidate paths.
+/// Samples are display-only and must never become deletion targets.
+pub fn build_plan_items(selected: &[Selected], results: &[scan::RuleResult]) -> Vec<PlanItem> {
+    let by_id: BTreeMap<&str, &scan::RuleResult> =
+        results.iter().map(|result| (result.id, result)).collect();
+    selected
+        .iter()
+        .filter_map(|item| {
+            by_id.get(item.id).map(|result| PlanItem {
+                id: item.id,
+                needs_sudo: result.needs_sudo,
+                tier: result.tier,
+                paths: result.info.candidates.clone(),
+                purge_ack: false,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,6 +285,6 @@ mod tests {
         assert_eq!(ABORT_COPY, "aborted, nothing was deleted");
         assert!(NO_TTY_COPY.is_ascii());
         assert!(JSON_REFUSAL_COPY.is_ascii());
-        assert!(NO_PROMPT_REFUSAL_COPY.is_ascii());
+        assert!(SCRIPTED_MODE_COPY.is_ascii());
     }
 }

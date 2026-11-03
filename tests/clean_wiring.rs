@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use sweep::cli::Preset;
-use sweep::cli::clean::{EMPTY_SELECTION_COPY, selection_preview};
+use sweep::cli::clean::{EMPTY_SELECTION_COPY, build_plan_items, selection_preview};
 use sweep::rules::Tier;
 use sweep::scan::{RuleResult, ScanInfo};
 use sweep::ui::Theme;
@@ -27,6 +27,7 @@ fn rr(id: &'static str, tier: Tier, bytes: u64, needs_sudo: bool) -> RuleResult 
         location: "~/.cache/test".to_string(),
         info: ScanInfo {
             bytes,
+            candidates: vec![std::path::PathBuf::from(format!("/tmp/{id}"))],
             ..Default::default()
         },
         net_of: Vec::new(),
@@ -95,4 +96,15 @@ fn empty_selection_maps_to_exit_0_copy() {
     assert!(items.is_empty());
     // The preview helper is never called for an empty accept.
     assert_eq!(EMPTY_SELECTION_COPY, "nothing selected, exiting");
+}
+
+#[test]
+fn plan_uses_candidates_not_display_samples() {
+    let results = vec![rr("safe-a", Tier::Safe, 10, false)];
+    let sel = Selection::new(&results, Preset::Regular, false, false, &BTreeMap::new());
+    let items = sel.selected();
+    let plan = build_plan_items(&items, &results);
+
+    assert_eq!(plan.len(), 1);
+    assert_eq!(plan[0].paths, vec![std::path::PathBuf::from("/tmp/safe-a")]);
 }

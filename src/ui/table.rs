@@ -679,6 +679,7 @@ mod tests {
                 dirs: 2,
                 newest_age: None,
                 samples: vec![PathBuf::from("/tmp/old.bin")],
+                candidates: Vec::new(),
                 note: Some("1 newer than keep-days kept".into()),
             },
             net_of: Vec::new(),

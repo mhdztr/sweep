@@ -34,9 +34,9 @@ pub struct GeneralConfig {
     pub trash_instead_of_delete: bool,
     pub color: String,
     pub unicode: String,
-    /// Parsed, unused until M2+.
+    /// Retain this many history records after a mutating clean run.
     pub history_keep_runs: u32,
-    /// Parsed, unused until M2+.
+    /// UI hint threshold for slow scans.
     pub scan_slow_after_ms: u64,
 }
 
@@ -48,7 +48,7 @@ impl Default for GeneralConfig {
             trash_instead_of_delete: false,
             color: String::new(),
             unicode: String::new(),
-            history_keep_runs: 50,
+            history_keep_runs: 100,
             scan_slow_after_ms: 2000,
         }
     }

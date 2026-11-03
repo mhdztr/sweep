@@ -50,7 +50,10 @@ pub enum LockError {
     #[error("another sweep is running (pid {pid}, since {since})")]
     Held { pid: u32, since: String },
     #[error("cannot lock {path}: {source}")]
-    Io { path: PathBuf, source: std::io::Error },
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 pub struct LockGuard {
@@ -201,7 +204,7 @@ pub fn append_history(state_dir: &Path, record: &HistoryRecord) -> std::io::Resu
     }
     let path = history_file_path(state_dir);
     let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
-    let line = serde_json::to_string(record).map_err(|e| std::io::Error::other(e))?;
+    let line = serde_json::to_string(record).map_err(std::io::Error::other)?;
     writeln!(f, "{}", line)?;
     #[cfg(unix)]
     {

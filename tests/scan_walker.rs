@@ -41,7 +41,10 @@ fn candidate_capture_is_opt_in_and_excludes_directories() {
     std::fs::write(&file, b"data").expect("write");
 
     let stats = walk(root.path(), &opts()).expect("ordinary walk");
-    assert!(stats.candidates.is_empty(), "ordinary scans stay lightweight");
+    assert!(
+        stats.candidates.is_empty(),
+        "ordinary scans stay lightweight"
+    );
 
     let mut candidate_opts = opts();
     candidate_opts.capture_candidates = true;

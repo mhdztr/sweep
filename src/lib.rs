@@ -7,13 +7,13 @@ pub mod cli;
 pub mod config;
 pub mod ctx;
 pub mod env;
+pub mod exec;
 pub mod report;
 pub mod rules;
 pub mod scan;
 pub mod state;
 pub mod system;
 pub mod ui;
-pub mod exec;
 
 /// Plan/schema version for JSON outputs (`kind` + `version` fields).
 pub const SCHEMA_VERSION: u32 = 1;
