@@ -231,3 +231,26 @@ fn scripted_dry_run_does_not_mutate_fixture_or_state() {
     assert_eq!(before, common::manifest(sandbox.path()));
     assert!(!sweep::state::state_dir(sandbox.path()).exists());
 }
+
+#[test]
+fn trash_flag_is_refused() {
+    let _sandbox = common::sandbox();
+    Command::cargo_bin("sweep")
+        .expect("binary")
+        .args(["clean", "--trash", "--yes", "--preset", "safe"])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("not implemented"));
+}
+
+#[test]
+fn json_flag_is_refused() {
+    let _sandbox = common::sandbox();
+    Command::cargo_bin("sweep")
+        .expect("binary")
+        .args(["clean", "--json", "--yes", "--preset", "safe"])
+        .assert()
+        .failure()
+        .code(1);
+}
