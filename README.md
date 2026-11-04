@@ -22,7 +22,7 @@ locations, orphan removal, browser caches) collapse into one checklist with:
 
 - **Tiers of danger**: safe defaults · opt-in cautions · gated destruction
 - **Nothing blind**: scan first, sizes + counts + newest-file age before any delete
-- **Honest skips**: running Firefox, live sockets, open files: reported, never silently touched
+- **Honest skips**: running Firefox, live sockets: reported, never silently touched (open-fd checking deferred to later milestone)
 - **Scriptable**: `--json`, stable exit codes, `--dry-run`, presets for automation
 
 ## Quickstart
@@ -48,7 +48,7 @@ sweep clean --preset full --dry-run      # preview the deep purge, touch nothing
 2. Destructive rules only exist under `full` and require typed `PURGE` per category;
    `--yes` does **not** bypass them.
 3. Hardcoded never-touch list: your Documents/Pictures/Videos/Projects, `/etc`,
-   `/usr`, live sockets, `systemd-private-*`, open files, `.git` histories.
+   `/usr`, live sockets, `systemd-private-*`, `.git` histories.
 4. Sudo happens once, batched, after user-level cleanup, or not at all (decline = skip + report).
 
 Full model: [docs/SAFETY.md](docs/SAFETY.md).

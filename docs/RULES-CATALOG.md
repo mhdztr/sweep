@@ -60,8 +60,7 @@ report-only (no clean action ever).
 - **Protections (shared with `tmp-full`, single source `rules::tmp::PROTECTED`):**
   subdirs matching `systemd-private-*`, `snap.mount*`, `dbus-*` *sockets*;
   entries `X11-unix`, `.XIM-unix`, `.ICE-unix`; any socket/FIFO/device node
-  (`S_ISSOCK|S_ISFIFO|S_ISCHR`); `/tmp/.X*-lock`; files with an open fd
-  (`/proc/*/fd` readlink scan, execution-time re-check).
+  (`S_ISSOCK|S_ISFIFO|S_ISCHR`); `/tmp/.X*-lock`. _(Open-fd checking deferred.)_
 - **Action:** bottom-up walker delete of non-protected entries; never follows symlinks.
 - **Age:** default **keep ≥ 1 day old** (`keep_days=1`); `--keep-days 0` cleans all non-protected.
 - **Guard:** none. **Sudo:** no (falls back to skipping unreadable root-owned entries

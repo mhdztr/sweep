@@ -65,7 +65,7 @@ kernel/filesystem bugs.
 - **System:** `/etc`, `/usr`, `/boot`, `/var/lib/pacman`, `/var/lib/container*`
   (docker *volumes* data), service units, package databases.
 - **Inside `/tmp`:** `systemd-private-*`, `snap.mount*`, `X11-unix`, `.XIM-unix`,
-  `.ICE-unix`, `.X*-lock`, sockets/FIFOs/device nodes, any path with an open fd.
+  `.ICE-unix`, `.X*-lock`, sockets/FIFOs/device nodes.
 - **Symlinks:** never followed (scan counts size 0 & doesn't descend; delete
   unlinks the link itself only when the link's parent rule applies).
 - **The sweep repo itself** (`Ctx::exe_dir` walk-up to `.git`), excluded from
@@ -100,7 +100,7 @@ Age basis = **mtime** (newest descendant for directories). Documented limitation
 | Editors/apps | ∈ {code, cursor, codium, slack, discord, element, obsidian, signal, telegram-desktop} | `editor-cache`, `app-caches` (matched paths) |
 | Steam | `steam`, `steamwebhelper` | `steam-shader` |
 | Build in progress | `makepkg` running **and** cwd under a given AUR repo → per-repo skip | `aur-builds` |
-| Open files in `/tmp` | readlink `/proc/*/fd/*` prefix match | `tmp`, `tmp-full` |
+| Open files in `/tmp` | _deferred (not implemented)_ | — |
 | Docker daemon | `docker info` ≤2 s timeout | `docker` (Guarded) |
 
 Guarded row = `Detect::Guarded{reason}`: pre-unchecked + shown. User override →
