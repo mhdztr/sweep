@@ -169,6 +169,11 @@ fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected])
     match exec::execute(ctx, &plan) {
         Ok(report) => report.exit_hint as i32,
         Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("lock") {
+                eprintln!("error: another sweep is running");
+                return 1;
+            }
             eprintln!("error: {e}");
             3
         }
