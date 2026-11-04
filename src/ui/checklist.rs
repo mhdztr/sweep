@@ -624,8 +624,35 @@ where
 
 /// Write a rendered frame, flushing so the user sees it immediately.
 fn write_frame(out: &mut impl Write, text: &str) -> std::io::Result<()> {
-    out.write_all(text.as_bytes())?;
-    out.flush()
+    let bytes = text.as_bytes();
+    let mut written = 0;
+    while written < bytes.len() {
+        match out.write(&bytes[written..]) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "failed to write frame",
+                ));
+            }
+            Ok(n) => written += n,
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    loop {
+        match out.flush() {
+            Ok(()) => break,
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
 }
 
 /// Erase the `height` rows the previous frame occupied: move the cursor to the
