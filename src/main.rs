@@ -49,8 +49,8 @@ fn dispatch(mut root: Root) -> i32 {
         Commands::History { .. } => not_yet("history", "M4: run history"),
         Commands::Doctor => not_yet("doctor", "M5: environment diagnostics"),
         Commands::Rules {
-            command: RulesCommand::List { .. },
-        } => not_yet("rules list", "M3: rule catalog registry"),
+            command: RulesCommand::List { tier, json },
+        } => sweep::cli::rules::run(root, tier, json),
         Commands::Config {
             command: ConfigCommand::Init { .. },
         } => not_yet("config init", "M6: configuration"),

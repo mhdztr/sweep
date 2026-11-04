@@ -578,6 +578,8 @@ fn detail_line(r: &RuleResult) -> String {
         (SkipKind::Protected, "protected"),
         (SkipKind::Hot, "hot"),
         (SkipKind::Whitelist, "whitelist"),
+        (SkipKind::Overlap, "overlap"),
+        (SkipKind::OpenFile, "open-file"),
         (SkipKind::MountBound, "mount-bound"),
     ];
     let parts: Vec<String> = skips
@@ -684,6 +686,7 @@ mod tests {
             },
             net_of: Vec::new(),
             skipped: BTreeMap::new(),
+            report_only: false,
         }
     }
 

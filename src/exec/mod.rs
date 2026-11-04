@@ -51,6 +51,7 @@ pub struct PlanItem {
     pub tier: Tier,
     pub paths: Vec<PathBuf>,
     pub purge_ack: bool,
+    pub guard_overridden: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -87,9 +88,14 @@ impl Plan {
                 "sudo system pass is not available in this build".to_string(),
             ));
         }
-        if self.trash {
+        if self.trash
+            && self
+                .selected
+                .iter()
+                .any(|item| matches!(item.id, "trash" | "journal-user"))
+        {
             return Err(ExecError::Other(
-                "--trash is not implemented in this build".to_string(),
+                "selected rule cannot be staged in XDG trash".to_string(),
             ));
         }
         Ok(())
@@ -101,6 +107,7 @@ pub struct ItemReport {
     pub id: &'static str,
     pub freed: u64,
     pub removed: u64,
+    pub staged: u64,
     pub skipped: Vec<String>,
     pub errors: Vec<String>,
 }
@@ -118,6 +125,8 @@ pub struct RunReport {
     pub freed_total: u64,
     pub duration: Duration,
     pub dry_run: bool,
+    pub trash: bool,
+    pub aborted: bool,
     pub exit_hint: ExitCode,
     pub sudo_pass: SudoPassReport,
 }
@@ -126,13 +135,93 @@ pub mod del;
 pub mod sudo;
 pub mod trash;
 
+fn run_user_journal(ctx: &Ctx, item: &PlanItem) -> ItemReport {
+    let max_size = &ctx.config.rules.journal_user.max_size;
+    let before = journal_usage();
+    let output = std::process::Command::new("journalctl")
+        .arg("--user")
+        .arg(format!("--vacuum-size={max_size}"))
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let after = journal_usage();
+            let freed = match (before, after) {
+                (Some(before), Some(after)) => before.saturating_sub(after),
+                _ => {
+                    eprintln!("warning: unable to measure user journal size after vacuum");
+                    0
+                }
+            };
+            ItemReport {
+                id: item.id,
+                freed,
+                removed: 1,
+                staged: 0,
+                skipped: Vec::new(),
+                errors: Vec::new(),
+            }
+        }
+        Ok(output) => ItemReport {
+            id: item.id,
+            freed: 0,
+            removed: 0,
+            staged: 0,
+            skipped: Vec::new(),
+            errors: vec![format!(
+                "journalctl --user vacuum failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            )],
+        },
+        Err(error) => ItemReport {
+            id: item.id,
+            freed: 0,
+            removed: 0,
+            staged: 0,
+            skipped: Vec::new(),
+            errors: vec![format!("cannot run journalctl: {error}")],
+        },
+    }
+}
+
+fn journal_usage() -> Option<u64> {
+    let output = std::process::Command::new("journalctl")
+        .args(["--user", "--disk-usage"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.split_whitespace().find_map(parse_human_size)
+}
+
+fn parse_human_size(token: &str) -> Option<u64> {
+    let (number, unit) = token.trim_end_matches(',').split_at(
+        token
+            .find(|character: char| !character.is_ascii_digit() && character != '.')
+            .unwrap_or(token.len()),
+    );
+    let number: f64 = number.parse().ok()?;
+    let unit = unit.trim_end_matches("B").trim_end_matches("i");
+    let power = match unit.to_ascii_uppercase().as_str() {
+        "" => 0,
+        "K" => 1,
+        "M" => 2,
+        "G" => 3,
+        "T" => 4,
+        _ => return None,
+    };
+    Some((number * 1024_f64.powi(power)).round() as u64)
+}
+
 fn item_report_to_log(items: &[ItemReport]) -> String {
     let mut s = String::new();
     for it in items {
         s.push_str(&format!(
-            "[{}] removed={} freed={} skipped={} errors={}\n",
+            "[{}] removed={} staged={} freed={} skipped={} errors={}\n",
             it.id,
             it.removed,
+            it.staged,
             it.freed,
             it.skipped.len(),
             it.errors.len()
@@ -177,6 +266,11 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
     } else {
         None
     };
+    let _signals = if plan.dry_run {
+        None
+    } else {
+        Some(crate::ui::tty::arm().map_err(ExecError::Io)?)
+    };
 
     let progress = RuleProgress::new(plan.selected.len(), !ctx.flags.quiet && !ctx.flags.json);
     progress.start();
@@ -184,10 +278,39 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
     let mut items: Vec<ItemReport> = Vec::new();
     let mut freed_total: u64 = 0;
     let mut has_error = false;
+    let mut aborted = false;
 
-    for item in plan.selected.iter() {
+    for (index, item) in plan.selected.iter().enumerate() {
+        if !plan.dry_run && crate::ui::tty::interrupted() {
+            aborted = true;
+            record_unstarted(&plan.selected[index..], &mut items, &progress);
+            break;
+        }
         progress.start_rule(item.id);
         if item.needs_sudo {
+            progress.finish_rule();
+            continue;
+        }
+        if item.id == "journal-user" {
+            if plan.dry_run {
+                eprintln!(
+                    "dry-run: journal-user\n  argv: journalctl --user --vacuum-size={}",
+                    ctx.config.rules.journal_user.max_size
+                );
+                items.push(ItemReport {
+                    id: item.id,
+                    freed: 0,
+                    removed: 0,
+                    staged: 0,
+                    skipped: vec!["dry-run".to_string()],
+                    errors: vec![],
+                });
+            } else {
+                let report = run_user_journal(ctx, item);
+                has_error |= !report.errors.is_empty();
+                freed_total += report.freed;
+                items.push(report);
+            }
             progress.finish_rule();
             continue;
         }
@@ -214,13 +337,14 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
                 id: item.id,
                 freed: 0,
                 removed: 0,
+                staged: 0,
                 skipped: vec!["dry-run".to_string()],
                 errors: vec![],
             });
             progress.finish_rule();
             continue;
         }
-        match del::remove_items(ctx, item, plan.trash) {
+        match del::remove_items(ctx, item, plan.trash, plan.keep_days) {
             Ok(r) => {
                 if !r.errors.is_empty() {
                     has_error = true;
@@ -234,16 +358,28 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
                     id: item.id,
                     freed: 0,
                     removed: 0,
+                    staged: 0,
                     skipped: vec![],
                     errors: vec![e.to_string()],
                 });
             }
         }
         progress.finish_rule();
+        if !plan.dry_run && crate::ui::tty::interrupted() {
+            aborted = true;
+            record_unstarted(&plan.selected[index + 1..], &mut items, &progress);
+            break;
+        }
     }
     progress.finish();
 
-    let exit_hint = if has_error {
+    aborted |= !plan.dry_run && crate::ui::tty::interrupted();
+    if aborted {
+        eprintln!("execution interrupted; remaining rules skipped");
+    }
+    let exit_hint = if aborted {
+        ExitCode::Gate
+    } else if has_error {
         ExitCode::ExecErr
     } else {
         ExitCode::Ok
@@ -293,6 +429,8 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
         freed_total,
         duration,
         dry_run: plan.dry_run,
+        trash: plan.trash,
+        aborted,
         exit_hint,
         sudo_pass: SudoPassReport {
             declined: false,
@@ -302,4 +440,19 @@ pub fn execute(ctx: &Ctx, plan: &Plan) -> Result<RunReport, ExecError> {
     };
     summary::print_summary(&report);
     Ok(report)
+}
+
+fn record_unstarted(items: &[PlanItem], reports: &mut Vec<ItemReport>, progress: &RuleProgress) {
+    for item in items {
+        progress.start_rule(item.id);
+        reports.push(ItemReport {
+            id: item.id,
+            freed: 0,
+            removed: 0,
+            staged: 0,
+            skipped: vec!["aborted".into()],
+            errors: Vec::new(),
+        });
+        progress.finish_rule();
+    }
 }

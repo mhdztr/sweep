@@ -11,6 +11,20 @@ mod common;
 use serde_json::Value;
 use sweep::ctx::Ctx;
 
+const RULE_IDS: [&str; 12] = [
+    "tmp",
+    "user-cache",
+    "thumbnails",
+    "trash",
+    "journal-user",
+    "browser-cache",
+    "editor-cache",
+    "tool-caches",
+    "app-caches",
+    "log-rotate",
+    "xdg-state-junk",
+    "xdg-state-coredumps",
+];
 const RULE_KEYS: [&str; 11] = [
     "applied",
     "bytes",
@@ -76,14 +90,22 @@ fn assert_schema_keys(v: &Value) {
             .iter()
             .map(|r| r["id"].as_str().expect("id"))
             .collect::<Vec<_>>(),
-        ["tmp", "user-cache", "thumbnails", "trash"],
+        RULE_IDS,
         "rule order = registry order"
     );
     for r in rules {
         assert_eq!(keys_of(r), RULE_KEYS.to_vec(), "per-rule: exactly 11 keys");
-        assert_eq!(r["tier"], "safe");
+        let id = r["id"].as_str().expect("id");
+        assert_eq!(
+            r["tier"],
+            if id == "xdg-state-coredumps" {
+                "caution"
+            } else {
+                "safe"
+            }
+        );
         assert!(r["applied"].is_boolean());
-        assert!(r["reason"].is_null(), "applied rules have null reason");
+        assert_eq!(r["reason"].is_null(), r["applied"]);
         assert_eq!(r["needs_sudo"], false);
         assert!(r["bytes"].is_u64() && r["files"].is_u64() && r["dirs"].is_u64());
         // Key always present; null only when the rule counted nothing (e.g.

@@ -73,6 +73,101 @@ pub struct RulesConfig {
     pub thumbnails: RuleToggle,
     #[serde(rename = "trash")]
     pub trash: RuleToggle,
+    #[serde(rename = "journal-user")]
+    pub journal_user: JournalUserConfig,
+    #[serde(rename = "browser-cache")]
+    pub browser_cache: RuleToggle,
+    #[serde(rename = "editor-cache")]
+    pub editor_cache: RuleToggle,
+    #[serde(rename = "tool-caches")]
+    pub tool_caches: ToolCachesConfig,
+    #[serde(rename = "app-caches")]
+    pub app_caches: AppCachesConfig,
+    #[serde(rename = "log-rotate")]
+    pub log_rotate: RuleToggle,
+    #[serde(rename = "xdg-state-junk")]
+    pub xdg_state_junk: RuleToggle,
+    #[serde(rename = "pacman-cache")]
+    pub pacman_cache: PacmanCacheConfig,
+    #[serde(rename = "journal-system")]
+    pub journal_system: JournalSystemConfig,
+    #[serde(rename = "aur-builds")]
+    pub aur_builds: AurBuildsConfig,
+    #[serde(rename = "orphans")]
+    pub orphans: OrphansConfig,
+    #[serde(rename = "flatpak-unused")]
+    pub flatpak_unused: RuleToggle,
+    #[serde(rename = "docker")]
+    pub docker: RuleToggle,
+    #[serde(rename = "podman")]
+    pub podman: RuleToggle,
+    #[serde(rename = "dev-artifacts")]
+    pub dev_artifacts: DevArtifactsConfig,
+    #[serde(rename = "steam-shader")]
+    pub steam_shader: RuleToggle,
+    #[serde(rename = "snapshots-report")]
+    pub snapshots_report: RuleToggle,
+    #[serde(rename = "downloads")]
+    pub downloads: DownloadsConfig,
+    #[serde(rename = "cache-deep")]
+    pub cache_deep: RuleToggle,
+    #[serde(rename = "tmp-full")]
+    pub tmp_full: RuleToggle,
+    #[serde(rename = "pkgcache-zero")]
+    pub pkgcache_zero: RuleToggle,
+    #[serde(rename = "purge-logs")]
+    pub purge_logs: RuleToggle,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct JournalUserConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub max_size: String,
+}
+
+impl Default for JournalUserConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_size: "100M".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct ToolCachesConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub disable_tools: Vec<String>,
+}
+
+impl Default for ToolCachesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            disable_tools: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct AppCachesConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub extra_paths: Vec<String>,
+}
+
+impl Default for AppCachesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            extra_paths: Vec::new(),
+        }
+    }
 }
 
 fn true_default() -> bool {
@@ -109,6 +204,125 @@ impl Default for UserCacheConfig {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct PacmanCacheConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub keep_versions: Option<u32>,
+}
+
+impl Default for PacmanCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keep_versions: Some(2),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct JournalSystemConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub max_size: Option<String>,
+}
+
+impl Default for JournalSystemConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_size: Some("100M".to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct AurBuildsConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub keep_days: Option<u32>,
+}
+
+impl Default for AurBuildsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keep_days: Some(1),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct OrphansConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub confirm_batch: Option<usize>,
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+impl Default for OrphansConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            confirm_batch: Some(200),
+            exclude: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct DevArtifactsConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub min_age_days: Option<u32>,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
+impl Default for DevArtifactsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_age_days: Some(30),
+            paths: vec![
+                "node_modules".to_string(),
+                "target".to_string(),
+                ".venv".to_string(),
+                "__pycache__".to_string(),
+                ".pytest_cache".to_string(),
+                ".gradle".to_string(),
+                ".cache/pypoetry".to_string(),
+                "elm-stuff".to_string(),
+                ".n2".to_string(),
+                ".bundle".to_string(),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(default)]
+pub struct DownloadsConfig {
+    #[serde(default = "true_default")]
+    pub enabled: bool,
+    pub keep_days: Option<u32>,
+}
+
+impl Default for DownloadsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keep_days: Some(0),
+        }
+    }
+}
+
 /// `path` = `SWEEP_CONFIG` value (`Some`) or [`default_path`] (sandbox-aware;
 /// caller resolves). `None` ⇒ absent default path ⇒
 /// `Config::default()` (the "defaults-only path"). `Some(p)` missing ⇒
@@ -129,12 +343,59 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
             }
         }
     })?;
+    // Basic validation of known rule keys under [rules.*] if present
+    if let Ok(table) = text.parse::<toml::Table>()
+        && let Some(toml::Value::Table(rules_tbl)) = table.get("rules")
+    {
+        let known = [
+            "tmp",
+            "user-cache",
+            "thumbnails",
+            "trash",
+            "journal-user",
+            "browser-cache",
+            "editor-cache",
+            "tool-caches",
+            "app-caches",
+            "log-rotate",
+            "xdg-state-junk",
+            "pacman-cache",
+            "journal-system",
+            "aur-builds",
+            "orphans",
+            "flatpak-unused",
+            "docker",
+            "podman",
+            "dev-artifacts",
+            "steam-shader",
+            "snapshots-report",
+            "downloads",
+            "cache-deep",
+            "tmp-full",
+            "pkgcache-zero",
+            "purge-logs",
+        ];
+        for k in rules_tbl.keys() {
+            if !known.contains(&k.as_str()) {
+                // Be lenient for forward compat; unknown keys remain ignored.
+            }
+        }
+        // [presets] honored if present
+    }
     let config: Config = toml::from_str(&text).map_err(|e| ConfigError::Parse {
         path: path.to_path_buf(),
         message: parse_message(&text, &e),
     })?;
     match config.general.preset.as_str() {
-        "safe" | "regular" | "full" => Ok(config),
+        "safe" | "regular" | "full" => {
+            if !crate::rules::journal_user::validate_max_size(&config.rules.journal_user.max_size) {
+                return Err(ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    message: "invalid [rules.journal-user].max_size".into(),
+                });
+            }
+            Ok(config)
+        }
         v => Err(ConfigError::Parse {
             path: path.to_path_buf(),
             message: format!("invalid preset '{v}' (expected: safe, regular, full)"),

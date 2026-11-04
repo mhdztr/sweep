@@ -3,6 +3,8 @@
 
 use crate::scan::fsinfo;
 
+pub mod proc;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DistroFamily {
     Arch,

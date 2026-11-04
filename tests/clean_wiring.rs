@@ -32,6 +32,7 @@ fn rr(id: &'static str, tier: Tier, bytes: u64, needs_sudo: bool) -> RuleResult 
         },
         net_of: Vec::new(),
         skipped: BTreeMap::new(),
+        report_only: false,
     }
 }
 

@@ -157,6 +157,9 @@ pub struct Ctx {
     /// CLI: `["/tmp", "/var/tmp"]`; for_test: `[home/".fake-tmp",
     /// home/".fake-var-tmp"]`.
     pub tmp_roots: Vec<PathBuf>,
+    pub proc_root: Option<PathBuf>,
+    pub runtime_dir: PathBuf,
+    pub var_log_root: PathBuf,
 }
 
 impl Ctx {
@@ -179,6 +182,8 @@ impl Ctx {
         let config = config::load_from(config_path.as_deref())?;
         let system = SystemCtx::detect().map_err(|e| CtxError::System(e.to_string()))?;
         let run_id = crate::state::run_id_now();
+        // SAFETY: geteuid has no pointer arguments or side effects.
+        let uid = unsafe { libc::geteuid() };
         Ok(Ctx {
             home,
             config,
@@ -186,6 +191,9 @@ impl Ctx {
             flags,
             run_id,
             tmp_roots: vec![PathBuf::from("/tmp"), PathBuf::from("/var/tmp")],
+            proc_root: Some(PathBuf::from("/proc")),
+            runtime_dir: PathBuf::from(format!("/run/user/{uid}")),
+            var_log_root: PathBuf::from("/var/log"),
         })
     }
 
@@ -194,6 +202,9 @@ impl Ctx {
     pub fn for_test(home: PathBuf) -> Ctx {
         Ctx {
             tmp_roots: vec![home.join(".fake-tmp"), home.join(".fake-var-tmp")],
+            proc_root: None,
+            runtime_dir: home.join(".fake-run"),
+            var_log_root: home.join(".fake-var-log"),
             home,
             config: Config::default(),
             system: SystemCtx::for_test(),

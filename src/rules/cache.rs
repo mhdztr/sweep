@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// 5-minute hot window: depth-1 entries touched within it are excluded
-/// (scan honesty, a file still being written is not reclaimable). Hot-skip
-/// is depth-1 only; per-entry checks at execution land in M2 (plan §7 risk 8).
+/// (scan honesty, a file still being written is not reclaimable). The
+/// executor rechecks candidate mtimes before removal.
 const HOT_WINDOW: Duration = Duration::from_secs(300);
 
 pub struct UserCacheRule;
@@ -42,11 +42,18 @@ impl Rule for UserCacheRule {
     }
     fn scan(&self, ctx: &Ctx, svc: &ScanService) -> Result<RuleScan, ScanError> {
         let keep: Vec<String> = ctx.config.rules.user_cache.keep.clone();
+        let overlaps: Vec<_> = overlap_paths(ctx)
+            .into_iter()
+            .map(|(_, path)| path)
+            .collect();
         let now = svc.now;
         // Prune at depth == 1 ONLY (children of the `.cache` root):
         // whitelisted keeps + hot entries. No gate.
         let prune: Arc<walker::PruneFn> =
             Arc::new(move |_path: &std::path::Path, info: &EntryInfo| {
+                if overlaps.iter().any(|root| root == _path) {
+                    return Prune::Drop(SkipKind::Overlap);
+                }
                 if info.depth != 1 {
                     return Prune::Keep;
                 }
@@ -92,6 +99,53 @@ impl Rule for UserCacheRule {
             skipped: stats.skipped,
         })
     }
+}
+
+pub(crate) fn overlap_paths(ctx: &Ctx) -> Vec<(&'static str, std::path::PathBuf)> {
+    let cache = ctx.home.join(".cache");
+    let mut paths = Vec::new();
+    if ctx.config.rules.thumbnails.enabled {
+        paths.push(("thumbnails", cache.join("thumbnails")));
+    }
+    if ctx.config.rules.browser_cache.enabled {
+        paths.extend(
+            super::browser_cache::target_paths(ctx)
+                .into_iter()
+                .map(|path| ("browser-cache", path)),
+        );
+    }
+    if ctx.config.rules.tool_caches.enabled {
+        paths.extend(
+            super::tool_caches::target_paths(ctx)
+                .into_iter()
+                .map(|path| ("tool-caches", path)),
+        );
+    }
+    if ctx.config.rules.app_caches.enabled {
+        paths.extend(
+            super::app_caches::target_paths(ctx)
+                .into_iter()
+                .map(|path| ("app-caches", path)),
+        );
+    }
+    if ctx.config.rules.xdg_state_junk.enabled {
+        paths.extend(
+            super::xdg_state::target_paths(ctx)
+                .into_iter()
+                .map(|path| ("xdg-state-junk", path)),
+        );
+    }
+    if ctx.config.rules.log_rotate.enabled {
+        paths.extend(
+            super::log_rotate::target_paths(ctx)
+                .into_iter()
+                .map(|path| ("log-rotate", path)),
+        );
+    }
+    paths
+        .into_iter()
+        .filter(|(_, path)| path != &cache && path.starts_with(&cache))
+        .collect()
 }
 
 pub struct ThumbnailsRule;

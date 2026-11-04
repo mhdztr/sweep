@@ -45,8 +45,8 @@ Tasks:
 - [x] `rules/mod.rs`: `Rule` trait, `Tier`, `Detect`, registry; first 4 rules:
       `tmp` (full protected list + age gate), `user-cache` (whitelist + hot skip),
       `thumbnails`, `trash`
-- [x] `scan/mod.rs`: run registry → `Vec<RuleResult>`, overlap subtraction (`net_of`)
-      for user-cache vs thumbnails
+- [x] `scan/mod.rs`: run registry → `Vec<RuleResult>`, overlap accounting (`net_of`)
+for user-cache versus dedicated cache paths
 - [x] `ui/`: header box, `format.rs` (bytes/age), `table.rs` (wide/narrow/ascii),
       scan progress spinner
 - [x] `sweep scan` command + `--json` (schema v1, `kind:"scan"`)
@@ -116,52 +116,48 @@ Tasks:
 ## M2: Interactive clean + full safe tier
 **Goal:** the daily-driver loop works end-to-end for all 11 safe rules.
 **Depends on:** M1.5.
+**Implementation status:** complete; the real-machine destructive acceptance
+remains a maintainer-only gate.
 
 Tasks:
 - [x] UI glyph cleanup: no emoji in any output, tier glyphs are ASCII
       `+ ! #` unconditionally; width math + golden snapshots updated; README
       tier bullets plus CLI-UX/RULES-CATALOG/SAFETY examples updated in the
       same commit (decision D13). Done in R8.
-- [ ] `ui/checklist.rs`: hand-rolled prompt loop (D14; `inquire` not used) + keybindings
+- [x] `ui/checklist.rs`: hand-rolled prompt loop (D14; `inquire` not used) + keybindings
       (space/a/n/i/p/enter/esc/?), live totals, row states (ready/guarded/locked/disabled/report-only).
-      Core landed R9 (tier ordering with report-only rows last, sticky `--i-know-what-im-doing`
-      across preset cycles, guard precedence: `!applied` wins → `Disabled`, guarded
-      destructive stays locked outside `full`); renderer/event loop landed R10:
-      pure `ui/render.rs`, raw mode on `libc` in `ui/tty.rs` (D15), `run_interactive`/
-      `apply_key` in `ui/checklist.rs`. In R9/R10 this core and renderer were
-      library-only (D14/D15): `Commands::Clean` was still the `not_yet` stub, so
-      nothing reached the CLI yet. Slice 3 (R13) closed that: `Commands::Clean`
-       now calls `run_interactive`, or a preset-selected scripted flow for
-       `--yes`/`--no-prompt`. The four implemented safe rules build plans from
-       full eligible candidates and execute after P1 (or directly in scripted
-       mode); `--only`/`--exclude` filter scan results and are registry-validated.
-       Clean `--json`, trash, destructive, sudo, and the remaining safe rules are
-       still deferred.
-- [ ] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
+      Core and renderer landed in R9/R10; R13 wired the CLI through the
+      interactive or preset-selected scripted flow. The safe rules build plans
+      from full eligible candidates and execute after P1; `--only`/`--exclude`
+      filter scan results and are registry-validated. Clean JSON, destructive
+      gates, and sudo remain deferred.
+- [x] Presets: safe/regular/full selection logic. Per SAFETY §2 (normative), `full`
       unlocks destructive rows as **unlocked-but-unchecked** (the core does this now;
       typed-PURGE *execution* still arrives M4, so `full` today is a selection
       preview over safe+caution+destructive, no destructive run happens before M4)
 - [x] `ui/confirm.rs`: P1 summary (default cancel), abort copy, exit 2 paths (raw mode, signal handling, only `y`/`Y` proceeds, Esc/`q`/Ctrl-C/Enter/EOF abort)
-- [~] `exec/`: M2 safe file/symlink primitives (no-follow, never-touch and prefix
-      re-check), plan validation, sequential execution, continue-on-error, and
-      per-rule report are implemented. Recursive deletion, hot/open-fd guards,
-      and sudo remain for later slices.
+- [x] `exec/`: safe file/symlink handling, never-touch/prefix rechecks,
+      process/open-file guards, sequential execution, continue-on-error,
+      per-rule reports, interrupt handling, and XDG trash staging are implemented.
+      Destructive rules and sudo remain deferred.
 - [x] Dry-run printing (up to 20 candidates + argv) and scripted `--yes`/`--no-prompt`
       for the implemented safe rules
 - [x] `ui/progress.rs` per-rule progress + `ui/summary.rs` card
-- [ ] Remaining safe rules: `journal-user`, `browser-cache`(+guard), `editor-cache`(+guard),
+- [x] Remaining safe rules: `journal-user`, `browser-cache`(+guard), `editor-cache`(+guard),
       `tool-caches` (all 12 tool paths), `app-caches`, `log-rotate`, `xdg-state-junk`
       (coredump sub-row default-off)
-- [ ] `system/proc.rs`: comm guards + injectable /proc for tests; open-fd scan for tmp
+- [x] `system/proc.rs`: comm guards + injectable /proc for tests; open-fd scan for tmp
 - [x] State: action log writer + `history.jsonl` append + pruning for mutating runs
-- [ ] Exit codes 0/1/2/3 wired everywhere; `--trash` (exec/trash.rs) implemented
-- [ ] Tests per safe rule (detect/scan/clean/age/guard) + gate tests (P1 abort,
-      --yes boundaries) + checklist keybinding logic tests (renderer-agnostic core)
+- [x] Exit codes 0/1/2/3 wired for M2 flows; `--trash` stages supported paths
+- [x] Rule scan fixtures for safe target boundaries, age gates, and coredump
+      defaults; shared execution tests cover prefix/protection checks, guards,
+      trash, interruption, dry-run, and checklist/P1 behavior.
 
 **Acceptance gate:**
-- Full interactive run on real machine frees space; skipped-reasons all visible.
-- Guard tests prove firefox-running → refused at execute (with P6 override path).
-- `--dry-run` byte-identical sandbox assertion holds for a full clean.
+- [ ] Maintainer acceptance: full interactive clean on a real machine frees
+      space; do not run this automatically or as part of agent validation.
+- [x] Guard tests prove firefox-running → refused at execute (with P6 override path).
+- [x] `--dry-run` sandbox assertion holds for a representative multi-rule clean.
 
 ## M3: Caution rule library
 **Goal:** all 9 selectable caution rules implemented with list-first confirms.

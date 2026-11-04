@@ -28,6 +28,11 @@ impl Rule for TrashRule {
                 reason: "disabled in config".to_string(),
             };
         }
+        if ctx.flags.trash {
+            return Detect::NotApplicable {
+                reason: "trash cannot be staged in trash".into(),
+            };
+        }
         let trash = ctx.home.join(".local/share/Trash");
         if !trash.join("files").is_dir() && !trash.join("info").is_dir() {
             return Detect::NotApplicable {

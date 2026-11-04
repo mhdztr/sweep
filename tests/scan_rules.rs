@@ -162,12 +162,12 @@ fn user_cache_whitelist_excluded() {
     ctx.config.rules.user_cache.keep = vec!["app-cache".to_string()];
 
     let scan = UserCacheRule.scan(&ctx, &svc()).expect("scan");
-    // app-cache (10 024 B) pruned; thumbnails (5 120 B) + hot-fresh-entry
-    // (500 B) pruned ⇒ remaining: thumbnails only.
-    assert_eq!(scan.info.bytes, 5_120);
-    assert_eq!(scan.info.files, 2);
-    assert_eq!(scan.info.dirs, 2, ".cache + thumbnails");
+    // app-cache is whitelisted; thumbnails are owned by their dedicated rule.
+    assert_eq!(scan.info.bytes, 0);
+    assert_eq!(scan.info.files, 0);
+    assert_eq!(scan.info.dirs, 1, "only the .cache root remains");
     assert_eq!(scan.skipped.get(&SkipKind::Whitelist), Some(&1));
+    assert_eq!(scan.skipped.get(&SkipKind::Overlap), Some(&1));
 }
 
 #[test]
@@ -178,12 +178,13 @@ fn user_cache_hot_entry_excluded() {
 
     let scan = UserCacheRule.scan(&ctx_for(home), &svc()).expect("scan");
     assert_eq!(
-        scan.info.bytes, 15_144,
-        "10 000 + 24 + 4 096 + 1 024; fresh-entry (500 B) hot-pruned"
+        scan.info.bytes, 10_024,
+        "app-cache only; thumbnails belong to their dedicated rule"
     );
-    assert_eq!(scan.info.files, 4);
-    assert_eq!(scan.info.dirs, 3, ".cache + app-cache + thumbnails");
+    assert_eq!(scan.info.files, 2);
+    assert_eq!(scan.info.dirs, 2, ".cache + app-cache");
     assert_eq!(scan.skipped.get(&SkipKind::Hot), Some(&1));
+    assert_eq!(scan.skipped.get(&SkipKind::Overlap), Some(&1));
     assert!(
         !scan
             .info

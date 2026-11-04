@@ -24,6 +24,13 @@ pub struct ConfirmItem {
     pub id: &'static str,
     pub bytes: u64,
     pub needs_sudo: bool,
+    pub trash: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GuardConfirmItem {
+    pub id: &'static str,
+    pub reason: String,
 }
 
 fn tier_for_id(id: &str) -> Tier {
@@ -74,21 +81,30 @@ pub fn render_p1(items: &[ConfirmItem], theme: &Theme) -> String {
         }
     }
 
+    let action = if items.iter().all(|item| item.trash) {
+        "will be staged"
+    } else {
+        "will be deleted"
+    };
     let line1 = sanitize_text(
-        &format!(
-            "{} {} · {} will be deleted",
-            count,
-            noun,
-            format_bytes(total_bytes)
-        ),
+        &format!("{count} {noun} · {} {action}", format_bytes(total_bytes)),
         theme.unicode,
     );
     let line2 = sanitize_text(
         &format!("{} destructive category included", destructive_count),
         theme.unicode,
     );
-    let line3 = sanitize_text("deletions are permanent (use --trash to", theme.unicode);
-    let line4 = sanitize_text("stage instead)", theme.unicode);
+    let (line3, line4) = if items.iter().all(|item| item.trash) {
+        (
+            "staged items remain until the trash is emptied".to_string(),
+            "space is not freed yet".to_string(),
+        )
+    } else {
+        (
+            sanitize_text("deletions are permanent (use --trash to", theme.unicode),
+            sanitize_text("stage instead)", theme.unicode),
+        )
+    };
 
     if !theme.unicode {
         let mut out = String::new();
@@ -139,6 +155,50 @@ pub enum ConfirmOutcome {
 /// Run P1 confirmation. Default is cancel (Enter/Esc/q/Ctrl-C → abort).
 /// Only 'y' or 'Y' proceeds. --yes does NOT auto-confirm P1.
 pub fn confirm_p1(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOutcome> {
+    run_yes_no(&render_p1(items, theme))
+}
+
+pub fn render_p2(items: &[ConfirmItem], theme: &Theme) -> String {
+    let action = if items.iter().all(|item| item.trash) {
+        "will be staged in XDG trash"
+    } else {
+        "will be removed"
+    };
+    let mut out = String::from("  Caution: user coredumps may be needed for crash analysis.\n");
+    for item in items {
+        out.push_str("  ");
+        out.push_str(&sanitize_text(item.id, theme.unicode));
+        out.push_str(": ");
+        out.push_str(&format_bytes(item.bytes));
+        out.push('\n');
+    }
+    out.push_str(&format!("  Selected coredumps {action}.\n"));
+    out.push_str("  Continue? [y/N] (cancel is default)\n");
+    out
+}
+
+pub fn confirm_p2(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOutcome> {
+    run_yes_no(&render_p2(items, theme))
+}
+
+pub fn render_p6(items: &[GuardConfirmItem], theme: &Theme) -> String {
+    let mut out = String::from("  Warning: selected caches belong to running applications.\n");
+    for item in items {
+        out.push_str("  ");
+        out.push_str(item.id);
+        out.push_str(": ");
+        out.push_str(&sanitize_text(&item.reason, theme.unicode));
+        out.push('\n');
+    }
+    out.push_str("  Continue anyway? [y/N] (cancel is default)\n");
+    out
+}
+
+pub fn confirm_p6(items: &[GuardConfirmItem], theme: &Theme) -> io::Result<ConfirmOutcome> {
+    run_yes_no(&render_p6(items, theme))
+}
+
+fn run_yes_no(prompt: &str) -> io::Result<ConfirmOutcome> {
     if !std::io::stdin().is_terminal() {
         return Err(io::Error::new(io::ErrorKind::NotConnected, NO_TTY_COPY));
     }
@@ -147,6 +207,7 @@ pub fn confirm_p1(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOut
     let _signals = tty::arm()?;
 
     // Determine if stdout is a tty for raw mode/cursor handling
+    // SAFETY: isatty only inspects stdout's file descriptor.
     let stdout_is_tty = unsafe { libc::isatty(libc::STDOUT_FILENO) } == 1;
     let output = if stdout_is_tty {
         Some(libc::STDOUT_FILENO)
@@ -155,7 +216,6 @@ pub fn confirm_p1(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOut
     };
     let _guard = tty::RawMode::enter(output)?;
 
-    let prompt = render_p1(items, theme);
     print!("{}", prompt);
     io::stdout().flush()?;
 
@@ -206,11 +266,13 @@ mod tests {
                 id: "tmp",
                 bytes: 1024,
                 needs_sudo: false,
+                trash: false,
             },
             ConfirmItem {
                 id: "downloads",
                 bytes: 2048,
                 needs_sudo: false,
+                trash: false,
             },
         ];
         let theme = Theme {
@@ -220,5 +282,23 @@ mod tests {
         let s = render_p1(&items, &theme);
         assert!(s.contains("2 categories"));
         assert!(s.contains("Proceed? [y/N]"));
+    }
+
+    #[test]
+    fn p1_and_p2_copy_describe_trash_and_coredump_gates() {
+        let item = ConfirmItem {
+            id: "xdg-state-coredumps",
+            bytes: 1024,
+            needs_sudo: false,
+            trash: true,
+        };
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+        assert!(render_p1(std::slice::from_ref(&item), &theme).contains("will be staged"));
+        let p2 = render_p2(&[item], &theme);
+        assert!(p2.contains("may be needed for crash analysis"));
+        assert!(p2.contains("will be staged in XDG trash"));
     }
 }

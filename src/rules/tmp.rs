@@ -89,13 +89,29 @@ impl Rule for TmpRule {
         Detect::Ready
     }
     fn scan(&self, ctx: &Ctx, svc: &ScanService) -> Result<RuleScan, ScanError> {
-        let prune: Arc<walker::PruneFn> = Arc::new(|_path: &std::path::Path, info: &EntryInfo| {
-            if is_protected(&info.name, info.kind) {
-                Prune::Drop(SkipKind::Protected)
-            } else {
-                Prune::Keep
-            }
-        });
+        let open_files = ctx
+            .proc_root
+            .as_deref()
+            .map(crate::system::proc::open_files)
+            .transpose()
+            .map_err(|source| ScanError::Io {
+                path: ctx
+                    .proc_root
+                    .clone()
+                    .unwrap_or_else(|| std::path::PathBuf::from("/proc")),
+                source,
+            })?
+            .unwrap_or_default();
+        let prune: Arc<walker::PruneFn> =
+            Arc::new(move |path: &std::path::Path, info: &EntryInfo| {
+                if open_files.contains(path) {
+                    Prune::Drop(SkipKind::OpenFile)
+                } else if is_protected(&info.name, info.kind) {
+                    Prune::Drop(SkipKind::Protected)
+                } else {
+                    Prune::Keep
+                }
+            });
         // D-9: age gate applies to non-dir entries only; dirs always counted
         // (0 bytes) and descended. keep_days=0 ⇒ gate off. Missing mtime is
         // treated as age 0 ⇒ excluded (conservative: never claim fresh files

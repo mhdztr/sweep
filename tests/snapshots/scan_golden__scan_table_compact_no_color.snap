@@ -13,4 +13,20 @@ root: 1 TiB total · 512 GiB used · 20.1 KiB recla…
     5 KiB · 2 files
   + safe  trash
     2.1 KiB · 2 files
+  + safe  journal (user)
+    — · — files
+  + safe  browser
+    — · — files
+  + safe  editor
+    — · — files
+  + safe  dev tools
+    — · — files
+  + safe  apps
+    — · — files
+  + safe  logs
+    — · — files
+  + safe  state/junk
+    — · — files
+  ! caut.  coredumps (default off)
+    — · — files
 reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s

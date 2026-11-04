@@ -41,6 +41,7 @@ fn rr(id: &'static str, tier: Tier, applied: bool, bytes: u64) -> RuleResult {
         },
         net_of: Vec::new(),
         skipped: BTreeMap::new(),
+        report_only: false,
     }
 }
 

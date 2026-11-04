@@ -106,6 +106,7 @@ pub struct RuleResult {
     pub net_of: Vec<&'static str>,
     /// for -v output only.
     pub skipped: BTreeMap<SkipKind, u64>,
+    pub report_only: bool,
 }
 
 pub struct Totals {
@@ -159,7 +160,7 @@ pub fn run_with_candidates(
         capture_candidates,
     };
 
-    let registry = crate::rules::registry();
+    let registry = crate::rules::scan_registry();
     let total_rules = registry.len();
 
     // Detect phase (main thread, sequential, trivial cost).
@@ -184,6 +185,7 @@ pub fn run_with_candidates(
                     info: ScanInfo::default(),
                     net_of: Vec::new(),
                     skipped: BTreeMap::new(),
+                    report_only: rule.report_only(),
                 }));
                 ready.push(None);
             }
@@ -271,6 +273,7 @@ pub fn run_with_candidates(
                 info,
                 net_of: Vec::new(),
                 skipped,
+                report_only: rule.report_only(),
             }
         })
         .collect();
@@ -283,27 +286,32 @@ pub fn run_with_candidates(
             tmp.info.note = Some(format!("{kept_newer} newer than keep-days kept"));
         }
     }
-    // user-cache: subtract thumbnails when applied.
-    let thumbs = results
-        .iter()
-        .find(|r| r.id == "thumbnails")
-        .map(|r| (r.applied, r.info.bytes, r.info.files, r.info.dirs));
-    let thumbnail_candidates: std::collections::BTreeSet<PathBuf> = results
-        .iter()
-        .find(|r| r.id == "thumbnails")
-        .map(|r| r.info.candidates.iter().cloned().collect())
-        .unwrap_or_default();
-    if let Some(uc) = results.iter_mut().find(|r| r.id == "user-cache")
-        && let Some((true, tb, tf, td)) = thumbs
-    {
-        uc.info.bytes = uc.info.bytes.saturating_sub(tb);
-        uc.info.files = uc.info.files.saturating_sub(tf);
-        uc.info.dirs = uc.info.dirs.saturating_sub(td);
-        uc.info
-            .candidates
-            .retain(|path| !thumbnail_candidates.contains(path));
-        uc.net_of = vec!["thumbnails"];
-        uc.info.note = Some("(excl. thumbnails)".to_string());
+    let mut net_of = Vec::new();
+    for (id, path) in crate::rules::cache::overlap_paths(ctx) {
+        let applied = results.iter().any(|r| r.id == id && r.applied);
+        let exists = std::fs::symlink_metadata(path).is_ok();
+        if applied && exists && !net_of.contains(&id) {
+            net_of.push(id);
+        }
+    }
+    if let Some(user_cache) = results.iter_mut().find(|r| r.id == "user-cache") {
+        user_cache.net_of = net_of.clone();
+        if !net_of.is_empty() {
+            user_cache.net_of = net_of;
+            let labels = user_cache
+                .net_of
+                .iter()
+                .map(|id| {
+                    if *id == "thumbnails" {
+                        "thumbnails"
+                    } else {
+                        id
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            user_cache.info.note = Some(format!("(excl. {labels})"));
+        }
     }
 
     // Totals: reclaimable = Σ applied bytes (already net of overlaps);

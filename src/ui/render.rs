@@ -513,6 +513,7 @@ mod tests {
             },
             net_of: Vec::new(),
             skipped: BTreeMap::new(),
+            report_only: false,
         }
     }
 

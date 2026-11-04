@@ -1,6 +1,7 @@
 //! Command-line surface. Spec of record: `docs/CLI-UX.md`.
 
 pub mod clean;
+pub mod rules;
 pub mod scan;
 
 use clap::{Parser, Subcommand, ValueEnum};

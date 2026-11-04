@@ -113,7 +113,6 @@ fn stub_commands_exit_1_with_milestone_hint() {
     for (args, milestone) in [
         (vec!["doctor"], "M5"),
         (vec!["history"], "M4"),
-        (vec!["rules", "list"], "M3"),
         (vec!["config", "path"], "M6"),
     ] {
         sweep().args(&args).assert().failure().code(1).stderr(

@@ -63,23 +63,27 @@ report-only (no clean action ever).
   (`S_ISSOCK|S_ISFIFO|S_ISCHR`); `/tmp/.X*-lock`. _(Open-fd checking deferred.)_
 - **Action:** bottom-up walker delete of non-protected entries; never follows symlinks.
 - **Age:** default **keep ≥ 1 day old** (`keep_days=1`); `--keep-days 0` cleans all non-protected.
+  Execution rechecks candidate mtimes against the same keep-days value.
 - **Guard:** none. **Sudo:** no (falls back to skipping unreadable root-owned entries
   with `skipped{not readable}`; never escalates silently).
 - **Config:** `[rules.tmp] enabled`, `[general] keep_days`.
 - **Preview copy:** `1.2 GiB · 4,211 files · oldest 12d · newest 2d (37 newer than keep-days kept)`.
 - **Tests:** protected entries survive (seed socket + `systemd-private-x` dir); age
-  gate counts exact; symlink into `~/` not followed; open-fd file skipped.
+  gate counts exact; symlink into `~/` not followed; open-fd file skipped at scan
+  and execution.
 
 ## 2. `user-cache`: User caches, `+` safe
 - **Targets:** `~/.cache/*` top-level entries, **minus** whitelist `keep` and minus
   entries owned by destructive `cache-deep` handling (same root; `user-cache` skips
   whitelisted, `cache-deep` ignores whitelist).
 - **Action:** delete each non-whitelisted entry (whole subdir trees).
-- **Age:** none (cache semantics), but skips entries modified < 5 min ago (hot writes).
+- **Age:** none (cache semantics), but skips entries modified < 5 min ago (hot writes);
+  execution rechecks candidate mtimes.
 - **Guard:** none. **Sudo:** no.
 - **Config:** `[rules.user-cache] keep = [...]` (default `[]`), `enabled`.
-- **Note:** `thumbnails` and `browser-cache` are separate rules, to avoid
-  double-count, `user-cache` scan subtracts their bytes and shows `(excl. thumbnails/browser)`.
+- **Note:** `thumbnails` and other dedicated cache rules remain separate;
+  scan accounting subtracts overlaps with thumbnails, browser/editor/tool/app
+  caches, rotated cache logs, and XDG crash-state targets.
 - **Tests:** whitelist survivor; hot-write skip; byte accounting excludes sibling rules.
 
 ## 3. `thumbnails`: Thumbnail cache, `+` safe
@@ -112,10 +116,11 @@ report-only (no clean action ever).
   - Snap FF (Arch rarely): `~/snap/firefox/common/.cache/mozilla/firefox/*/cache2`
 - **Action:** delete matched dirs only (never `~/.cache/mozilla/firefox/*` profiles:
   cookies/logins live there; `Service Worker` **only** `CacheStorage` subtree).
-- **Guard:** browser process running (`firefox|chromium|chrome|brave|edge` comm
-  match) → `Detect::Guarded{"<app> running"}`, row pre-unchecked; if user checks it
-  anyway → caution-style confirm with warning.
-- **Age:** skip entries modified < 5 min. **Sudo:** no. **Config:** `enabled`.
+- **Guard:** browser process running (`firefox|chromium|chrome|brave|edge|msedge` comm
+  match) → row pre-unchecked; if user checks it anyway, P6 confirmation is
+  required. Execution rechecks the process.
+- **Age:** skip entries modified < 5 min; execution rechecks candidate mtimes.
+  **Sudo:** no. **Config:** `enabled`.
 - **Tests:** guarded detect with fake `/proc` seed (proc scanner injectable);
   profile files (cookies.sqlite) survive; per-browser glob coverage.
 
@@ -124,7 +129,8 @@ report-only (no clean action ever).
   `CachedExtensionVSIXs`; same under `~/.config/Cursor`, `VSCodium`, `~/.vscode-oss`;
   `~/.config/{Slack,Discord,Element}/Cache*`.
 - **Action:** delete matched cache dirs only, never `User/`, `extensions/`, `globalStorage/`.
-- **Guard:** app running. **Age:** 5-min hot skip. **Sudo:** no. **Config:** `enabled`.
+- **Guard:** app running. **Age:** 5-min hot skip, rechecked at execution.
+  **Sudo:** no. **Config:** `enabled`.
 - **Tests:** settings survive (`User/settings.json` seeded); guard behavior.
 
 ## 8. `tool-caches`: Dev tool caches, `+` safe
@@ -143,9 +149,9 @@ report-only (no clean action ever).
   | composer | `~/.cache/composer` | delete |
   | deno | `~/.cache/deno` | delete |
   | pipx | `~/.cache/pipx` | delete |
-- **Action semantics:** sub-item rows under one rule (rule scans sum all present).
+- **Action semantics:** all present tool targets are summed under one rule.
 - **Guard:** none (caches are safe while tools idle; concurrent build worst case =
-  re-download). **Age:** 5-min hot skip. **Sudo:** no.
+  re-download). **Age:** 5-min hot skip, rechecked at execution. **Sudo:** no.
 - **Config:** `[rules.tool-caches] disable_tools = ["cargo"]`.
 - **Tests:** per-tool fixture presence/absence; cargo `src/` and `bin/` survive;
   go `cache/download` only.
@@ -158,7 +164,7 @@ report-only (no clean action ever).
   `~/.cache/QtWebEngine` variants.
 - **Action:** delete matched. fontconfig/mesa/gdk-pixbuf regenerate on next launch
   (UI note: "regenerated automatically").
-- **Age:** 5-min hot skip. **Guard:** matched app running → guarded (obsidian/signal/telegram).
+- **Age:** 5-min hot skip, rechecked at execution. **Guard:** matched app running → guarded (obsidian/signal/telegram).
 - **Sudo:** no. **Config:** `enabled`, `extra_paths = []` (app-specific additions).
 - **Tests:** fixture matching; guarded ones respect process inject.
 
@@ -168,23 +174,21 @@ report-only (no clean action ever).
   `~/.local/state/**/log/*.{gz,[0-9],[0-9][0-9]}`; `~/.cache/thunderbird/*/Mail/*.log` (if present).
 - **Action:** delete matching files only (never the live `journal/` files, never
   current `syslog`/`Xorg.0.log`).
-- **Age:** rotated suffix implies age; still skip < 1 day.
-- **Guard:** none. **Sudo:** no for user paths; `/var/log` entries readable-deleted
-  if permitted else **split**: user part runs in user pass, unreadable root-only
-  entries are *not* silently escalated; they surface as a linked `journal-system`/
-  `purge-logs` system-pass suggestion (`note` field). *(Design decision: keep
-  `log-rotate` unprivileged; root rotated logs belong to system pass via a thin
-  wrapper rule; see M5.)*
+- **Age:** rotated suffix implies age; still skip < 1 day and recheck at execution.
+- **Guard:** none. **Sudo:** no. `/var/log` entries are attempted in the user
+  pass; unreadable or undeletable entries are reported as per-item errors and
+  are never escalated.
 - **Config:** `enabled`. **Tests:** live log survives, `.gz`/`.1` removed.
 
 ## 11. `xdg-state-junk`: Crash dumps, `+` safe
 - **Targets:** `~/.cache/*/Crashpad/{Reports,crashpad_metrics}*`,
-  `~/.config/*/crashes`, `~/.local/share/*/Crashpad`, user coredumps
-  `~/.local/state/libuuid/coredump/*` (files named `core.*`), `~/.cache/recently-used.xbel`? → **no** (user data).
-- **Action:** delete crash dirs/files. Coredumps: count + size shown separately
-  ("12 core dumps · 8.4 GiB"); these are **caution-flavored**: included in rule but
-  shown as sub-row requiring individual check (default unchecked).
-- **Guard:** none. **Age:** coredumps ≥ 1 day. **Sudo:** no. **Config:** `enabled`.
+  `~/.config/*/crashes`, `~/.local/share/*/Crashpad`.
+- **Action:** delete matched crash directories/files. User coredumps named
+  `core.*` under `~/.local/state/libuuid/coredump` appear in a separate
+  caution-tier sub-row (`xdg-state-coredumps`), default unchecked, and can be
+  selected independently after a P2 confirmation. Coredumps younger than one
+  day are kept.
+- **Guard:** none. **Sudo:** no. **Config:** `enabled`.
 - **Tests:** crash dirs cleared; coredump sub-row default-off; unrelated config survives.
 
 ---

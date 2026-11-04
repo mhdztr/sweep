@@ -4,9 +4,9 @@
 //! Flow: scan -> `Selection` -> P1 `confirm_p1` (interactive) or preset-selected
 //! scripted rows -> candidate-backed plan -> dry-run or safe execution.
 //!
-//! Deliberately deferred (all still M2/M4 tasks):
-//! - remaining safe rules, `--trash`, destructive PURGE gates, the batched sudo
-//!   pass, clean JSON output, and the history viewer;
+//! Deliberately deferred:
+//! - destructive PURGE gates, the batched sudo pass, clean JSON output, and
+//!   the history viewer;
 //! - `--json` for clean (JSON-SCHEMAS section 12, M6 per ROADMAP.md:239);
 //! - destructive and sudo execution, which are refused by the M2 plan validator.
 
@@ -73,7 +73,7 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
     let show_spinner = !ctx.flags.quiet && std::io::stderr().is_terminal();
     let (tx, rx) = mpsc::channel::<ScanEvent>();
     let spinner = crate::ui::progress::ScanSpinner::spawn(
-        crate::rules::registry().len(),
+        crate::rules::scan_registry().len(),
         rx,
         show_spinner,
         ctx.flags.unicode,
@@ -85,8 +85,7 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
     // `exclude` wins over `only` (CLI-UX section 2.2).
     out.results.retain(|r| keep_rule(r.id, only, exclude));
 
-    // `system/proc.rs` does not exist yet, so no guard is held in this slice.
-    let guards: BTreeMap<&str, String> = BTreeMap::new();
+    let guards = process_guards(&ctx);
     let theme = Theme {
         color: ctx.flags.color,
         unicode: ctx.flags.unicode,
@@ -135,8 +134,53 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                     id: i.id,
                     bytes: i.bytes,
                     needs_sudo: i.needs_sudo,
+                    trash: ctx.flags.trash,
                 })
                 .collect();
+            let guard_items: Vec<_> = items
+                .iter()
+                .filter(|item| item.guard_overridden)
+                .map(|item| confirm::GuardConfirmItem {
+                    id: item.id,
+                    reason: guards
+                        .get(item.id)
+                        .cloned()
+                        .unwrap_or_else(|| "application state changed".into()),
+                })
+                .collect();
+            if !guard_items.is_empty() {
+                match confirm::confirm_p6(&guard_items, &theme) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
+                        eprintln!("{NO_TTY_COPY}");
+                        return 1;
+                    }
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return 1;
+                    }
+                    Ok(ConfirmOutcome::Abort) => return 2,
+                    Ok(ConfirmOutcome::Proceed) => {}
+                }
+            }
+            let caution_items: Vec<_> = confirm_items
+                .iter()
+                .filter(|item| item.id == "xdg-state-coredumps")
+                .cloned()
+                .collect();
+            if !caution_items.is_empty() {
+                match confirm::confirm_p2(&caution_items, &theme) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
+                        eprintln!("{NO_TTY_COPY}");
+                        return 1;
+                    }
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return 1;
+                    }
+                    Ok(ConfirmOutcome::Abort) => return 2,
+                    Ok(ConfirmOutcome::Proceed) => {}
+                }
+            }
             match confirm::confirm_p1(&confirm_items, &theme) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
                     eprintln!("{NO_TTY_COPY}");
@@ -153,11 +197,33 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
     }
 }
 
-fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected]) -> i32 {
-    if ctx.flags.trash {
-        eprintln!("error: --trash not implemented in this build");
-        return 1;
+fn process_guards(ctx: &Ctx) -> BTreeMap<&'static str, String> {
+    let mut guards = BTreeMap::new();
+    let Some(proc_root) = ctx.proc_root.as_deref() else {
+        return BTreeMap::new();
+    };
+    match crate::system::proc::processes(proc_root) {
+        Ok(processes) => {
+            for (id, names) in [
+                ("browser-cache", crate::system::proc::BROWSERS),
+                ("editor-cache", crate::system::proc::EDITORS),
+                ("app-caches", crate::system::proc::APP_CACHES),
+            ] {
+                if let Some(name) = crate::system::proc::matching_process(&processes, names) {
+                    guards.insert(id, format!("{name} running"));
+                }
+            }
+        }
+        Err(error) => {
+            for id in ["browser-cache", "editor-cache", "app-caches"] {
+                guards.insert(id, format!("process state unavailable: {error}"));
+            }
+        }
     }
+    guards
+}
+
+fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected]) -> i32 {
     let plan = Plan {
         selected: build_plan_items(items, results),
         gate_ack: std::collections::BTreeMap::new(),
@@ -196,7 +262,10 @@ fn keep_rule(id: &str, only: &[String], exclude: &[String]) -> bool {
 /// (ROADMAP.md:240); this slice prints the plain copy locked by the
 /// orchestrator: `error: unknown rule '<id>'`.
 fn first_unknown_rule<'a>(only: &'a [String], exclude: &'a [String]) -> Option<&'a str> {
-    let known: Vec<&str> = crate::rules::registry().iter().map(|r| r.id()).collect();
+    let known: Vec<&str> = crate::rules::scan_registry()
+        .iter()
+        .map(|r| r.id())
+        .collect();
     only.iter()
         .chain(exclude.iter())
         .find(|id| !known.contains(&id.as_str()))
@@ -250,6 +319,7 @@ pub fn build_plan_items(selected: &[Selected], results: &[scan::RuleResult]) -> 
                 tier: result.tier,
                 paths: result.info.candidates.clone(),
                 purge_ack: false,
+                guard_overridden: item.guard_overridden,
             })
         })
         .collect()

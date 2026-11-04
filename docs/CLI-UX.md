@@ -42,15 +42,17 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 > `FORCE_COLOR` / `TERM=dumb` (resolved by `should_color()`, see
 > `docs/ARCHITECTURE.md` §7 and the env table in CLI-UX §7).
 
-> **M2 note: `sweep clean` executes the four implemented safe rules.**
-> Interactive runs show the §3 checklist and P1 summary gate (`ui/confirm.rs`)
-> before proceeding. `--yes` or `--no-prompt` selects the current preset
-> without a TTY and executes the safe plan. `--only`/`--exclude` filter scan
-> results before selection (exclude wins) and reject unknown ids with the §5
-> error. `--dry-run` prints candidate samples and argv-shaped operations
-> without changing files or state. `--json` and `--trash` remain refused until
-> their complete flows exist; destructive and sudo rules remain unavailable in
-> this M2 slice.
+> **M2 note: `sweep clean` executes all 11 safe rules.** User coredumps appear as
+> a separate caution-tier row, unchecked by default, with a per-rule P2 prompt
+> if selected. Interactive runs show the §3 checklist and P1 summary gate
+> (`ui/confirm.rs`) before proceeding; overriding a running-app guard also
+> requires P6. `--yes` or `--no-prompt` selects the
+> preset without a TTY. `--only`/`--exclude` filter scan results before selection
+> (exclude wins) and reject unknown ids. `--dry-run` prints candidate samples
+> without changing files or state. `--trash` stages supported paths in the XDG
+> trash and reports item counts, not freed space; the existing trash rule and
+> user-journal vacuum cannot themselves be staged. Clean `--json`, destructive
+> rules, and sudo execution remain deferred.
 
 Hidden internal: `--internal-system-pass <PLAN_PATH>` (documented in SAFETY §7).
 
@@ -96,7 +98,7 @@ Exit: 0 (always, unless error → 1).
 Notes:
 - Table rows may append a dim `(…)` note inside the category cell: age-gate / overlap
   counts (`tmp & var-tmp  (1 newer than keep-days kept)`, `user caches  (excl. thumbnails)`).
-  M1's goldens show the 4-rule output (tmp & var-tmp, user caches, thumbnails, trash).
+  Golden output includes all M2 scan rows, including not-applicable rules.
 - `-v` adds per-rule detail lines after the table.
 
 ### 2.2 `sweep clean`
@@ -126,9 +128,12 @@ progress → summary card → history append.
 > candidates, not the 20 display samples, and write a summary plus history/logs
 > for a real run. `--dry-run` prints up to 20 candidates per rule and an
 > argv-shaped preview, then leaves the filesystem and state unchanged. An empty
-> selection prints `nothing selected, exiting` (exit 0); clean JSON and `--trash`
-> remain refused (exit 1); destructive and sudo items are rejected by plan
-> validation. `--only`/`--exclude` are applied before `Selection::new` and
+> selection prints `nothing selected, exiting` (exit 0); clean JSON remains
+> refused (exit 1); destructive and sudo items are rejected by plan validation.
+> P1 copy distinguishes permanent deletion from staging. `--trash` stages
+> eligible files and symlinks in XDG trash, except the trash
+> and journal-vacuum rules, and reports staged counts separately from reclaimed
+> bytes. `--only`/`--exclude` are applied before `Selection::new` and
 > validated against the registry (`error: unknown rule '<id>'`, exit 1).
 
 #### 2.2b Summary card (every clean run)
@@ -140,8 +145,9 @@ progress → summary card → history append.
   +----------------------------------------------------------+
 ```
 Variants: partial failure uses `completed with errors` (exit 3); dry-run uses
-`dry run, nothing changed`; gate aborts use `aborted, nothing was deleted` (exit
-2). Trash mode is currently refused.
+`dry run, nothing changed`; trash mode reports `staged to trash` and a staged
+item count, not reclaimed bytes; gate aborts use `aborted, nothing was deleted`
+(exit 2).
 
 ### 2.3 `sweep top`
 **Purpose:** biggest dirs/files report (decision support).

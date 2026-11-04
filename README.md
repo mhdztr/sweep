@@ -9,11 +9,14 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
 > what works today. **`sweep scan` works** (M1: read-only measurement, table +
-> `--json`). **`sweep clean` executes the four implemented safe rules** (M2):
-> interactive runs use the checklist and P1 summary gate; `--yes`/`--no-prompt`
-> runs are scripted and safe for pipes; `--dry-run` prints candidate samples and
-> argv-shaped operations without changing files. Destructive rules, trash mode,
-> sudo, clean JSON, `top`, `history`, and `doctor` remain milestone work.
+> `--json`). **`sweep clean` executes the 11 safe rules** (M2), with a separate
+> coredump row that is caution-tier and unchecked by default. Interactive runs
+> use the checklist and P1 summary gate (plus P2 for selected coredumps);
+> `--yes`/`--no-prompt` runs are scripted;
+> `--dry-run` prints candidate samples without changing files. `--trash` stages
+> eligible paths in XDG trash and reports staged items separately from freed
+> space. Destructive rules, sudo, clean JSON, `top`, `history`, and `doctor`
+> remain milestone work.
 
 ## Why
 
@@ -22,7 +25,7 @@ locations, orphan removal, browser caches) collapse into one checklist with:
 
 - **Tiers of danger**: safe defaults · opt-in cautions · gated destruction
 - **Nothing blind**: scan first, sizes + counts + newest-file age before any delete
-- **Honest skips**: running Firefox, live sockets: reported, never silently touched (open-fd checking deferred to later milestone)
+- **Honest skips**: running guarded apps, open files in `/tmp`, live sockets, and protected paths are reported rather than silently touched
 - **Scriptable**: `--json`, stable exit codes, `--dry-run`, presets for automation
 
 ## Quickstart
@@ -31,7 +34,7 @@ locations, orphan removal, browser caches) collapse into one checklist with:
 sweep scan                 # read-only: what's reclaimable?
 sweep clean                # interactive checklist (default flow)
 sweep clean --preset safe --yes          # scripted, safe tier only
-sweep clean --preset full --dry-run      # preview the deep purge, touch nothing
+sweep clean --preset safe --dry-run      # preview the safe cleanup, touch nothing
 ```
 
 ## Presets

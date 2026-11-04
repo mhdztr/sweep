@@ -75,8 +75,8 @@ pub fn seed(home: &Path, rel: &str, len: u64, mtime: filetime::FileTime) {
 /// `home/.fake-var-tmp` match `Ctx::for_test` tmp_roots.
 ///
 /// Expected golden values (see plan §4): tmp 3282/2/2 (+1 protected,
-/// +1 kept-newer), thumbnails 5120/2/1, user-cache 15144/4/3 (hot=1) →
-/// net 10024/2/2, trash 2176/2/2, totals 20602.
+/// +1 kept-newer), thumbnails 5120/2/1, user-cache net 10024/2/2 (hot=1,
+/// thumbnails excluded), trash 2176/2/2, totals 20602.
 pub fn scan_fixture(home: &Path) {
     use std::time::Duration;
     let now = SystemTime::now();

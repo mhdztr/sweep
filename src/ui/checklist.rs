@@ -18,7 +18,7 @@ use std::io::Write;
 ///
 /// TODO(M3): the btrfs/snapper snapshot rule populates this (see plan §9.3;
 /// there is no report-only `Tier` yet, so the marker is an id list for now).
-const REPORT_ONLY_IDS: &[&str] = &[];
+const REPORT_ONLY_IDS: &[&str] = &[]; // kept for backward compat if needed
 
 /// Per-row state (CLI-UX §3.3 + SAFETY §2). Renderer maps these to glyphs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -673,7 +673,7 @@ fn erase_previous(out: &mut impl Write, height: usize) -> std::io::Result<()> {
 
 /// Bytes a row contributes when selected (0 when it cannot be selected).
 fn row_bytes(r: &RuleResult) -> u64 {
-    if r.applied && !REPORT_ONLY_IDS.contains(&r.id) {
+    if r.applied && !r.report_only && !REPORT_ONLY_IDS.contains(&r.id) {
         r.info.bytes
     } else {
         0
@@ -699,7 +699,7 @@ fn row_state_for(
     i_know_what_im_doing: bool,
     guards: &BTreeMap<&str, String>,
 ) -> RowState {
-    if REPORT_ONLY_IDS.contains(&r.id) {
+    if r.report_only || REPORT_ONLY_IDS.contains(&r.id) {
         return RowState::ReportOnly;
     }
     if !r.applied {

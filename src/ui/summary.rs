@@ -7,8 +7,13 @@ pub fn print_summary(report: &RunReport) {
     let errors: usize = report.items.iter().map(|i| i.errors.len()).sum();
     let skipped: usize = report.items.iter().map(|i| i.skipped.len()).sum();
     let cleaned = report.items.len();
+    let staged: u64 = report.items.iter().map(|i| i.staged).sum();
     let status = if report.dry_run {
         "dry run, nothing changed"
+    } else if report.aborted {
+        "interrupted; partial cleanup"
+    } else if report.trash && errors == 0 {
+        "staged to trash"
     } else if errors > 0 {
         "completed with errors"
     } else {
@@ -19,8 +24,13 @@ pub fn print_summary(report: &RunReport) {
     println!(
         "{}",
         row(&format!(
-            "freed: {} in {:.1}s",
-            format::format_bytes(report.freed_total),
+            "{}: {} in {:.1}s",
+            if report.trash { "staged" } else { "freed" },
+            if report.trash {
+                format!("{staged} items")
+            } else {
+                format::format_bytes(report.freed_total)
+            },
             report.duration.as_secs_f64()
         ))
     );

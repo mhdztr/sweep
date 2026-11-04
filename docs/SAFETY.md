@@ -48,13 +48,16 @@ kernel/filesystem bugs.
 4. Any prompt: `Esc`/`Ctrl-C` → abort message `aborted, nothing was deleted` → exit 2.
 5. Execution re-validates each target against the allowed-prefix list
    (independent second check, not trusting the plan alone).
-6. The current M2 `clean` slice executes only the four implemented safe rules.
-   It builds plans from full eligible scan candidates, never display samples;
-   execution independently re-checks prefixes, never-touch roots, symlinks,
-   and special files. Dry-run takes no lock and writes no state. A real run
-   takes the mutating lock through deletion and history/log writes. An accepted
-   empty selection exits 0 with `nothing selected, exiting`; interactive abort
-   still exits 2 with `aborted, nothing was deleted`.
+6. M2 `clean` executes the 11 safe rules, plus a caution-tier coredump row that
+   is unchecked by default. It builds plans from full eligible scan candidates,
+   never display samples; execution independently re-checks prefixes,
+   never-touch roots, symlinks, special files, process guards, and open `/tmp`
+   files, plus temp/cache/log age gates. Dry-run takes no lock and writes no
+   state. A real run holds the mutating lock through execution and history/log
+   writes. `--trash` stages supported files/symlinks and does not report them as
+   freed space. An accepted empty selection exits 0 with
+   `nothing selected, exiting`; interactive abort still exits 2 with
+   `aborted, nothing was deleted`.
 
 ## 3. Never-touch list (hardcoded; not configurable away)
 
@@ -85,7 +88,7 @@ kernel/filesystem bugs.
 | `dev-artifacts` | untouched older than | 30 days | `[rules.dev-artifacts].min_age_days` |
 | `user-cache`/`browser-cache`/`editor-cache`/`tool-caches`/`app-caches` | hot-write skip | 5 min | – (not configurable v0.1) |
 | `aur-builds` | keep newer than | 1 day | config |
-| `xdg-state-junk` coredumps | keep newer than | 1 day | config |
+| `xdg-state-junk` coredump row | keep newer than | 1 day | none (v0.1) |
 | `log-rotate` | rotated + ≥1 day | 1 day | config |
 | custom rules | `older_than_days` | **required** | per-rule |
 
@@ -96,19 +99,17 @@ Age basis = **mtime** (newest descendant for directories). Documented limitation
 
 | Guard scope | Match method | Held rules |
 |---|---|---|
-| Browsers | `/proc/[pid]/{comm,cmdline}` basename ∈ {firefox, chromium, chrome, brave, edge} | `browser-cache` |
+| Browsers | `/proc/[pid]/comm` ∈ {firefox, chromium, chrome, brave, edge, msedge} | `browser-cache` |
 | Editors/apps | ∈ {code, cursor, codium, slack, discord, element, obsidian, signal, telegram-desktop} | `editor-cache`, `app-caches` (matched paths) |
 | Steam | `steam`, `steamwebhelper` | `steam-shader` |
 | Build in progress | `makepkg` running **and** cwd under a given AUR repo → per-repo skip | `aur-builds` |
-| Open files in `/tmp` | _deferred (not implemented)_ | — |
+| Open files in `/tmp` | `/proc/[pid]/fd` symlink targets | `tmp` |
 | Docker daemon | `docker info` ≤2 s timeout | `docker` (Guarded) |
 
-Guarded row = `Detect::Guarded{reason}`: pre-unchecked + shown. User override →
-P6 warning confirm. Execution re-checks (TOCTOU minimized: check right before delete).
-In the checklist core (`src/ui/checklist.rs`) guarded-ness is carried as a row
-state (`RowState::Guarded`); the `Detect::Guarded` variant is introduced with the
-guard implementations (`system/proc.rs`) and mapped to that row state by the
-scan/UI boundary.
+Guarded rows are pre-unchecked and shown. User override requires P6. Execution
+rechecks app processes before each guarded rule's removal pass. `/tmp` open-file
+paths are excluded at scan and checked again before the tmp removal pass. The
+`/proc` root is injectable in tests.
 
 ## 6. Failure & interruption matrix
 
@@ -168,10 +169,12 @@ duration_ms, dry_run. Pruned to `history_keep_runs` (100).
 
 ## 9. Undo / trash semantics
 
-- `--trash` implements XDG: move to `Trash/files/<timestamped-name>/` + write
-  `Trash/info/<name>.trashinfo` (deletionDate, path). Refuses if free space <
-  5% + 512 MiB (would double-use space). UI states "space is NOT freed until you
-  empty trash".
+- `--trash` implements XDG: move to `Trash/files/<unique-name>` + write
+  `Trash/info/<unique-name>.trashinfo` (deletionDate, path). Staged items are
+  not counted as freed space. Existing trash contents and user-journal vacuum
+  cannot be staged. For cross-filesystem regular files, staging requires enough
+  destination space for the copy plus a 5% + 512 MiB reserve; unsupported or
+  failed moves leave the source in place and are reported.
 - Hard deletes have **no undo**: honesty copy in P1: "deletions are permanent".
 - Mitigations: dry-run first, gates, logs with samples, age gates, `--keep-days`.
 

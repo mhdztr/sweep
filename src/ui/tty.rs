@@ -37,6 +37,7 @@ use std::collections::VecDeque;
 use std::io;
 use std::os::fd::RawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, MutexGuard};
 
 /// How many bytes one `read` accepts. Big enough that an ordinary paste chunk
 /// lands in one read, small enough to keep the loop's latency bounded.
@@ -60,6 +61,7 @@ static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 /// Set by the SIGWINCH handler; polled once per loop iteration, which then
 /// re-reads [`crate::ui::terminal_width`] and re-renders.
 static RESIZED: AtomicBool = AtomicBool::new(false);
+static SIGNAL_GUARD_LOCK: Mutex<()> = Mutex::new(());
 
 /// `true` once a Ctrl-C has been observed, and not yet consumed by a loop.
 /// The loop clears it before blocking (see `arm`), so a Ctrl-C that arrives
@@ -120,12 +122,16 @@ struct SavedHandlers {
 /// run, including the gates.
 pub struct SignalGuard {
     saved: SavedHandlers,
+    _lock: MutexGuard<'static, ()>,
 }
 
 impl SignalGuard {
     /// Install both handlers, capturing the prior dispositions. Idempotent per
     /// install; call once per interactive session (the loop does).
     pub fn install() -> io::Result<SignalGuard> {
+        let lock = SIGNAL_GUARD_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut saved = SavedHandlers {
             int: zero_sigaction(),
             winch: zero_sigaction(),
@@ -149,7 +155,7 @@ impl SignalGuard {
                 return Err(io::Error::last_os_error());
             }
         }
-        Ok(SignalGuard { saved })
+        Ok(SignalGuard { saved, _lock: lock })
     }
 }
 

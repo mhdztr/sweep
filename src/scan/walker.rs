@@ -18,6 +18,8 @@ pub enum SkipKind {
     Protected,
     Hot,
     Whitelist,
+    Overlap,
+    OpenFile,
     MountBound,
     KeptNewer,
 }
@@ -200,6 +202,8 @@ struct SkipCounters {
     protected: AtomicU64,
     hot: AtomicU64,
     whitelist: AtomicU64,
+    overlap: AtomicU64,
+    open_file: AtomicU64,
     mount_bound: AtomicU64,
     kept_newer: AtomicU64,
 }
@@ -210,6 +214,8 @@ impl SkipCounters {
             SkipKind::Protected => &self.protected,
             SkipKind::Hot => &self.hot,
             SkipKind::Whitelist => &self.whitelist,
+            SkipKind::Overlap => &self.overlap,
+            SkipKind::OpenFile => &self.open_file,
             SkipKind::MountBound => &self.mount_bound,
             SkipKind::KeptNewer => &self.kept_newer,
         };
@@ -222,6 +228,8 @@ impl SkipCounters {
             (SkipKind::Protected, self.protected.load(Ordering::Relaxed)),
             (SkipKind::Hot, self.hot.load(Ordering::Relaxed)),
             (SkipKind::Whitelist, self.whitelist.load(Ordering::Relaxed)),
+            (SkipKind::Overlap, self.overlap.load(Ordering::Relaxed)),
+            (SkipKind::OpenFile, self.open_file.load(Ordering::Relaxed)),
             (
                 SkipKind::MountBound,
                 self.mount_bound.load(Ordering::Relaxed),
