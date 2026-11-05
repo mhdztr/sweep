@@ -265,7 +265,7 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
     }
 }
 
-fn process_guards(ctx: &Ctx) -> BTreeMap<&'static str, String> {
+pub(crate) fn process_guards(ctx: &Ctx) -> BTreeMap<&'static str, String> {
     let mut guards = BTreeMap::new();
     let Some(proc_root) = ctx.proc_root.as_deref() else {
         return BTreeMap::new();

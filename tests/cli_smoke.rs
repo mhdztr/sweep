@@ -210,3 +210,57 @@ fn rules_list_no_unicode_outputs_only_ascii() {
         String::from_utf8_lossy(&output)
     );
 }
+
+#[test]
+fn rules_list_json_matches_catalog() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let output = sweep()
+        .args(["--json", "rules", "list"])
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let actual: serde_json::Value = serde_json::from_slice(&output).expect("rules JSON");
+    let actual = actual["rules"].as_array().expect("rules array");
+    let expected: Vec<_> = include_str!("../docs/RULES-CATALOG.md")
+        .lines()
+        .filter_map(|line| {
+            let cells: Vec<_> = line
+                .trim()
+                .trim_matches('|')
+                .split('|')
+                .map(str::trim)
+                .collect();
+            if cells.len() != 5 || !cells[0].chars().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+            let id = cells[1].trim_matches('`');
+            let tier = match cells[2] {
+                "+" => "safe",
+                "!" => "caution",
+                "#" => "destructive",
+                "~" => "report",
+                _ => return None,
+            };
+            let needs_sudo = match cells[3] {
+                "sudo" => Some(true),
+                "sudo*" => None,
+                _ => Some(false),
+            };
+            Some((id.to_owned(), tier, needs_sudo))
+        })
+        .collect();
+
+    assert_eq!(actual.len(), expected.len(), "catalog rule count");
+    for (entry, (id, tier, needs_sudo)) in actual.iter().zip(expected) {
+        assert_eq!(entry["id"], id);
+        assert_eq!(entry["tier"], tier);
+        if let Some(needs_sudo) = needs_sudo {
+            assert_eq!(entry["needs_sudo"], needs_sudo, "rule {id}");
+        }
+        assert!(entry["state"].is_string());
+    }
+}

@@ -19,22 +19,29 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
         unicode: ctx.flags.unicode,
     };
 
+    let guards = crate::cli::clean::process_guards(&ctx);
     let registry = rules::registry();
     let mut results = Vec::new();
     for rule in &registry {
-        // For rules list, we show state based on detect
         let detect = rule.detect(&ctx);
         let applied = matches!(detect, rules::Detect::Ready);
         let reason = match &detect {
             rules::Detect::NotApplicable { reason } => Some(reason.clone()),
             rules::Detect::Ready => None,
         };
-        results.push((rule.as_ref(), applied, reason));
+        let state = state_for(
+            rule.tier(),
+            rule.needs_sudo(),
+            rule.report_only(),
+            &detect,
+            guards.get(rule.id()).map(String::as_str),
+        );
+        results.push((rule.as_ref(), applied, reason, state));
     }
 
     // Filter by tier if requested
     if let Some(t) = tier {
-        results.retain(|(r, _, _)| match t {
+        results.retain(|(r, _, _, _)| match t {
             TierArg::Safe => matches!(r.tier(), rules::Tier::Safe),
             TierArg::Caution => matches!(r.tier(), rules::Tier::Caution),
             TierArg::Destructive => matches!(r.tier(), rules::Tier::Destructive),
@@ -47,16 +54,17 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
         use serde_json::json;
         let items: Vec<_> = results
             .iter()
-            .map(|(r, applied, reason)| {
+            .map(|(r, applied, reason, state)| {
                 json!({
                     "id": r.id(),
                     "title": r.title(),
                     "category": r.category(),
-                    "tier": format!("{:?}", r.tier()).to_lowercase(),
+                    "tier": if r.report_only() { "report" } else { r.tier().as_str() },
                     "needs_sudo": r.needs_sudo(),
                     "applied": applied,
                     "reason": reason,
                     "report_only": r.report_only(),
+                    "state": state,
                 })
             })
             .collect();
@@ -71,59 +79,21 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
 
     // Plain-text output; sanitize detected state before writing it to the terminal.
     println!("  id                  tier         sudo  default   state");
-    for (r, applied, reason) in &results {
-        if r.report_only() {
-            let tier_str = "report";
-            let sudo_str = if r.needs_sudo() { "yes" } else { "-" };
-            let default_str = "-";
-            let state_str = if *applied {
-                if let Some(reas) = reason {
-                    format!("ready ({})", reas)
-                } else {
-                    "ready".to_string()
-                }
-            } else if let Some(reas) = reason {
-                format!("disabled ({})", reas)
-            } else {
-                "ready".to_string()
-            };
-            println!(
-                "  {:<20} {:<12} {:<5} {:<9} {}",
-                r.id(),
-                tier_str,
-                sudo_str,
-                default_str,
-                crate::ui::render::sanitize(&state_str, theme.unicode)
-            );
-            continue;
-        }
-        let tier_str = match r.tier() {
-            rules::Tier::Safe => "safe",
-            rules::Tier::Caution => "caution",
-            rules::Tier::Destructive => "destructive",
+    for (r, _, _, state) in &results {
+        let tier_str = if r.report_only() {
+            "report"
+        } else {
+            r.tier().as_str()
         };
         let sudo_str = if r.needs_sudo() { "yes" } else { "-" };
-        let default_str = match r.tier() {
-            rules::Tier::Safe => "regular",
-            rules::Tier::Caution => "off",
-            rules::Tier::Destructive => "full",
-        };
-        let state_str = if !*applied {
-            if let Some(reas) = reason {
-                format!("disabled ({})", reas)
-            } else {
-                "disabled".to_string()
-            }
-        } else if r.tier() == rules::Tier::Destructive {
-            "locked (purge gate)".to_string()
-        } else if r.tier() == rules::Tier::Caution {
-            if r.needs_sudo() {
-                "ready (sudo)".to_string()
-            } else {
-                "ready".to_string()
-            }
+        let default_str = if r.report_only() {
+            "-"
         } else {
-            "ready".to_string()
+            match r.tier() {
+                rules::Tier::Safe => "regular",
+                rules::Tier::Caution => "off",
+                rules::Tier::Destructive => "full",
+            }
         };
         println!(
             "  {:<20} {:<12} {:<5} {:<9} {}",
@@ -131,8 +101,73 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
             tier_str,
             sudo_str,
             default_str,
-            crate::ui::render::sanitize(&state_str, theme.unicode)
+            crate::ui::render::sanitize(state, theme.unicode)
         );
     }
     0
+}
+
+fn state_for(
+    tier: rules::Tier,
+    needs_sudo: bool,
+    report_only: bool,
+    detect: &rules::Detect,
+    guard: Option<&str>,
+) -> String {
+    if let rules::Detect::NotApplicable { reason } = detect {
+        return format!("disabled ({reason})");
+    }
+    if report_only {
+        return "ready".into();
+    }
+    if tier == rules::Tier::Destructive {
+        return "locked (purge gate)".into();
+    }
+    if let Some(reason) = guard {
+        return format!("guarded ({reason})");
+    }
+    if tier == rules::Tier::Caution && needs_sudo {
+        return "ready (sudo)".into();
+    }
+    "ready".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn states_distinguish_disabled_guarded_sudo_and_locked() {
+        let ready = rules::Detect::Ready;
+        assert_eq!(
+            state_for(
+                rules::Tier::Safe,
+                false,
+                false,
+                &ready,
+                Some("firefox running")
+            ),
+            "guarded (firefox running)"
+        );
+        assert_eq!(
+            state_for(rules::Tier::Caution, true, false, &ready, None),
+            "ready (sudo)"
+        );
+        assert_eq!(
+            state_for(rules::Tier::Destructive, false, false, &ready, None),
+            "locked (purge gate)"
+        );
+        assert_eq!(
+            state_for(
+                rules::Tier::Safe,
+                false,
+                false,
+                &rules::Detect::NotApplicable {
+                    reason: "disabled in config".into()
+                },
+                None
+            ),
+            "disabled (disabled in config)"
+        );
+    }
 }

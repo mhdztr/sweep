@@ -178,7 +178,8 @@ Tasks:
 - [x] List pagination (`confirm_batch`): orphan package list browses display
       pages with Up/Down; one confirmation covers the full list and cleanup
       remains a single batched operation.
-- [ ] `rules list` command (states: ready/guarded/sudo/disabled/locked)
+- [x] `rules list` command (ready/guarded/sudo/disabled/locked states; JSON rule
+      IDs, tiers, and sudo requirements checked against the catalog)
 - [x] ASCII-clean `scan`/`rules list` output under `--no-unicode`, including
       dynamic text; ASCII scan snapshot and output assertion updated.
 - [ ] Config: `[rules.*]` sections validated (known keys), `[presets]` honored

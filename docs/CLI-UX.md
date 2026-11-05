@@ -209,10 +209,15 @@ Exit 0; each line degrades to `unavailable (reason)` instead of vanishing.
   id                  tier         sudo  default   state
   tmp                 safe         -     regular   ready
   browser-cache       safe         -     regular   guarded (firefox running)
-  pacman-cache        caution      yes   off       ready (keep 2)
+  pacman-cache        caution      yes   off       ready (sudo)
   downloads           destructive  -     full      locked (purge gate)
-  snapshots-report    report       -     -         ready (btrfs, 48 snaps)
+  snapshots-report    report       -     -         ready
 ```
+Each registered rule is listed in catalog order. State reflects detection and
+process guards: unavailable or disabled rules are `disabled (reason)`, held
+rules are `guarded (reason)`, sudo-required caution rules are marked
+`ready (sudo)`, and destructive rules are `locked (purge gate)`. JSON includes
+the same state and uses `report` as the report-only tier.
 Unknown id given elsewhere (`--only bogus`) → exit 1 with `unknown rule 'bogus'; did you mean 'trash'?` (edit-distance suggestion).
 
 ### 2.7 `sweep config`
