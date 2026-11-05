@@ -25,7 +25,7 @@ tokens. Every string here is what ships (golden snapshots enforce it).
 | `--dry-run` | – | plan preview: sample paths + would-run commands; zero changes |
 | `--json` | – | JSON stdout (schema `version:1`) |
 | `--no-color` | `NO_COLOR=1` | disable ANSI colors |
-| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII rendering for box drawing (`+ - |`) and `...` ellipsis instead of `│─┌…`; in the interactive checklist (§3) this also covers all dynamic text (row titles, guard/disabled reasons). Tier glyphs/labels (`+ ! # ~`), checkboxes (`[x]`/`[ ]`) and `lock`/`sudo`/`warn` markers are always ASCII. Note: `scan`'s header/summary separators (`·`) and table placeholders (`—`) remain non-ASCII under this flag today (deferred; see ROADMAP M3 task "ASCII-clean `scan` output"). See §3 and §8. |
+| `--no-unicode` | `SWEEP_NO_UNICODE=1`, `LC_ALL=C`-ish detection | ASCII output for `scan` and `rules list`: box drawing uses `+ - |`, ellipses use `...`, separators/placeholders are ASCII, and dynamic text is sanitized. The interactive checklist also sanitizes dynamic text. Tier glyphs/labels (`+ ! # ~`), checkboxes (`[x]`/`[ ]`) and `lock`/`sudo`/`warn` markers are always ASCII. JSON output retains its schema and Unicode data. See §3 and §8. |
 | `--keep-days <N>` | `SWEEP_KEEP_DAYS` | override global age gate (N ≥ 0) |
 | `--trash` | `SWEEP_TRASH=1` | soft-delete to XDG trash instead of hard delete |
 | `--yes` / `-y` | `SWEEP_YES=1` | auto-confirm **safe & caution** prompts; **not** destructive |

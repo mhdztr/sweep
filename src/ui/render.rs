@@ -164,7 +164,7 @@ fn is_unsafe_char(c: char, unicode: bool) -> bool {
 ///
 /// Content, not painted strings: sanitizing an already-`Theme`-painted line
 /// would strip the SGR introducer and leave the CSI *body* as visible text.
-fn sanitize(text: &str, unicode: bool) -> String {
+pub(crate) fn sanitize(text: &str, unicode: bool) -> String {
     text.chars()
         .filter(|c| !is_unsafe_char(*c, unicode))
         .collect()

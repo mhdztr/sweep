@@ -69,7 +69,7 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
         return 0;
     }
 
-    // ASCII-clean output
+    // Plain-text output; sanitize detected state before writing it to the terminal.
     println!("  id                  tier         sudo  default   state");
     for (r, applied, reason) in &results {
         if r.report_only() {
@@ -93,7 +93,7 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
                 tier_str,
                 sudo_str,
                 default_str,
-                state_str
+                crate::ui::render::sanitize(&state_str, theme.unicode)
             );
             continue;
         }
@@ -125,14 +125,13 @@ pub fn run(_root: Root, tier: Option<TierArg>, json: bool) -> i32 {
         } else {
             "ready".to_string()
         };
-        let _ = theme;
         println!(
             "  {:<20} {:<12} {:<5} {:<9} {}",
             r.id(),
             tier_str,
             sudo_str,
             default_str,
-            state_str
+            crate::ui::render::sanitize(&state_str, theme.unicode)
         );
     }
     0

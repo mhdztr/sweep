@@ -151,10 +151,11 @@ impl Seg {
         }
     }
     fn render(&self, theme: &Theme) -> String {
+        let text = crate::ui::render::sanitize(&self.text, theme.unicode);
         match self.style {
-            Style::Plain => self.text.clone(),
-            Style::Dim => theme.dim(&self.text),
-            Style::Color(c) => theme.paint(c, &self.text),
+            Style::Plain => text,
+            Style::Dim => theme.dim(&text),
+            Style::Color(color) => theme.paint(color, &text),
         }
     }
 }
@@ -174,11 +175,17 @@ impl Cell {
     fn plain_right(text: impl Into<String>) -> Self {
         Cell::right(vec![Seg::plain(text)])
     }
-    fn visible(&self) -> usize {
-        self.segs.iter().map(|s| display_width(&s.text)).sum()
+    fn visible(&self, theme: &Theme) -> usize {
+        self.segs
+            .iter()
+            .map(|s| display_width(&crate::ui::render::sanitize(&s.text, theme.unicode)))
+            .sum()
     }
     fn render(&self, theme: &Theme) -> String {
-        self.segs.iter().map(|s| s.render(theme)).collect()
+        self.segs
+            .iter()
+            .map(|segment| segment.render(theme))
+            .collect()
     }
 }
 
@@ -194,7 +201,7 @@ fn render_line(cells: &[Cell], widths: &[usize], theme: &Theme) -> String {
     let mut line = format!(" {bar}");
     for (cell, w) in cells.iter().zip(widths) {
         let inner = w.saturating_sub(2);
-        let pad = inner.saturating_sub(cell.visible());
+        let pad = inner.saturating_sub(cell.visible(theme));
         let body = if cell.right {
             format!(" {}{} ", " ".repeat(pad), cell.render(theme))
         } else {
@@ -285,20 +292,24 @@ fn suffix(note: &str) -> String {
     }
 }
 
-/// Size + files cells: applied ⇒ formatted values; not applied ⇒ `—`.
-fn size_cell(r: &RuleResult) -> Cell {
+/// Size + files cells: applied ⇒ formatted values; not applied ⇒ a theme-aware dash.
+fn size_cell(r: &RuleResult, theme: &Theme) -> Cell {
     if r.applied {
         Cell::plain_right(format_bytes(r.info.bytes))
-    } else {
+    } else if theme.unicode {
         Cell::plain_right("—")
+    } else {
+        Cell::plain_right("-")
     }
 }
 
-fn files_cell(r: &RuleResult) -> Cell {
+fn files_cell(r: &RuleResult, theme: &Theme) -> Cell {
     if r.applied {
         Cell::plain_right(r.info.files.to_string())
-    } else {
+    } else if theme.unicode {
         Cell::plain_right("—")
+    } else {
+        Cell::plain_right("-")
     }
 }
 
@@ -346,7 +357,7 @@ pub fn render_scan_table(
     }
     if verbose {
         for r in results.iter().filter(|r| r.applied) {
-            out.push_str(&theme.dim(&detail_line(r)));
+            out.push_str(&theme.dim(&detail_line(r, theme)));
             out.push('\n');
         }
     }
@@ -376,7 +387,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
             display_width(&if r.applied {
                 format_bytes(r.info.bytes)
             } else {
-                "—".into()
+                if theme.unicode { "—" } else { "-" }.into()
             })
         })
         .collect();
@@ -386,7 +397,7 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
             display_width(&if r.applied {
                 r.info.files.to_string()
             } else {
-                "—".into()
+                if theme.unicode { "—" } else { "-" }.into()
             })
         })
         .collect();
@@ -465,8 +476,8 @@ fn render_wide(results: &[RuleResult], width: usize, theme: &Theme, out: &mut St
                     widths[2].saturating_sub(2),
                     theme.unicode,
                 ))]),
-                size_cell(r),
-                files_cell(r),
+                size_cell(r, theme),
+                files_cell(r, theme),
             ],
             &widths,
             theme,
@@ -493,7 +504,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
             display_width(&if r.applied {
                 format_bytes(r.info.bytes)
             } else {
-                "—".into()
+                if theme.unicode { "—" } else { "-" }.into()
             })
         })
         .chain([display_width("size")])
@@ -531,7 +542,7 @@ fn render_narrow(results: &[RuleResult], width: usize, theme: &Theme, out: &mut 
                     widths[1].saturating_sub(2),
                     theme.unicode,
                 ))]),
-                size_cell(r),
+                size_cell(r, theme),
             ],
             &widths,
             theme,
@@ -549,25 +560,32 @@ fn render_compact(results: &[RuleResult], width: usize, theme: &Theme, out: &mut
         // "  {tier}  {category}", category shrinks to fit, location/notes
         // dropped (visible via `-v`).
         let room = width.saturating_sub(4 + display_width(&tier) + 2);
+        let category = crate::ui::render::sanitize(r.category, theme.unicode);
         out.push_str(&format!(
             "  {}  {}\n",
             theme.paint(tier_color(r.tier), &tier),
-            truncate(r.category, room, theme.unicode)
+            truncate(&category, room, theme.unicode)
         ));
         let (size, files) = if r.applied {
             (format_bytes(r.info.bytes), r.info.files.to_string())
         } else {
-            ("—".to_string(), "—".to_string())
+            if theme.unicode {
+                ("—".to_string(), "—".to_string())
+            } else {
+                ("-".to_string(), "-".to_string())
+            }
         };
-        out.push_str(&format!("    {size} · {files} files\n"));
+        let separator = if theme.unicode { " · " } else { " | " };
+        out.push_str(&format!("    {size}{separator}{files} files\n"));
     }
 }
 
 /// `-v` detail line (dim; plan §2.15): counts + newest + nonzero skips +
 /// first sample.
-fn detail_line(r: &RuleResult) -> String {
+fn detail_line(r: &RuleResult, theme: &Theme) -> String {
+    let separator = if theme.unicode { " · " } else { " | " };
     let mut s = format!(
-        "  {}: {} files · {} dirs · newest {}",
+        "  {}: {} files{separator}{} dirs{separator}newest {}",
         r.id,
         r.info.files,
         r.info.dirs,
@@ -593,12 +611,12 @@ fn detail_line(r: &RuleResult) -> String {
         })
         .collect();
     if !parts.is_empty() {
-        s.push_str(&format!(" · kept: {}", parts.join(", ")));
+        s.push_str(&format!("{separator}kept: {}", parts.join(", ")));
     }
     if let Some(first) = r.info.samples.first() {
-        s.push_str(&format!(" · {}", first.display()));
+        s.push_str(&format!("{separator}{}", first.display()));
     }
-    s
+    crate::ui::render::sanitize(&s, theme.unicode)
 }
 
 #[cfg(test)]
@@ -711,6 +729,21 @@ mod tests {
     }
 
     #[test]
+    fn compact_ascii_mode_uses_ascii_placeholders_and_separators() {
+        let s = render_scan_table(
+            &[result(false)],
+            50,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+            false,
+        );
+        assert!(s.contains("    - | - files"));
+        assert!(s.is_ascii(), "{s:?}");
+    }
+
+    #[test]
     fn wide_mode_has_one_header_separator_and_aligned_rows() {
         let results = vec![result(true)];
         let s = render_scan_table(
@@ -779,6 +812,54 @@ mod tests {
             !s.contains('│') && !s.contains('─') && !s.contains('┌'),
             "no box-drawing glyphs in ascii mode:\n{s}"
         );
+        assert!(s.is_ascii(), "all table output must be ASCII:\n{s}");
+    }
+
+    #[test]
+    fn ascii_mode_sanitizes_dynamic_fields_and_verbose_details() {
+        let mut r = result(false);
+        r.category = "caché";
+        r.location = "/home/user/caché/漢".into();
+        r.reason = Some("unavailable — naïve\u{1b}[2J".into());
+        r.info.samples = vec![PathBuf::from("/home/user/é/漢")];
+        let s = render_scan_table(
+            &[r],
+            120,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+            true,
+        );
+        assert!(s.is_ascii(), "{s:?}");
+        assert!(!s.contains('—') && !s.contains('·'));
+        assert!(s.contains("/home/user/cach/"));
+        assert!(!s.contains('\u{1b}'));
+
+        let mut compact_result = result(true);
+        compact_result.category = "caché";
+        let compact = render_scan_table(
+            &[compact_result],
+            50,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+            false,
+        );
+        assert!(compact.is_ascii(), "{compact:?}");
+
+        let narrow = render_scan_table(
+            &[result(false)],
+            80,
+            &Theme {
+                color: false,
+                unicode: false,
+            },
+            false,
+        );
+        assert!(narrow.is_ascii(), "{narrow:?}");
+        assert!(!narrow.contains('—') && !narrow.contains('·'));
     }
 
     #[test]

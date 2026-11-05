@@ -191,3 +191,22 @@ fn scan_exits_zero_on_fixture() {
         .success()
         .stdout(predicates::str::contains("reclaimable:"));
 }
+
+#[test]
+fn rules_list_no_unicode_outputs_only_ascii() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let output = sweep()
+        .args(["--no-unicode", "rules", "list"])
+        .env("SWEEP_HOME", dir.path())
+        .env("SWEEP_TEST_GUARD", "1")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        output.is_ascii(),
+        "rules list --no-unicode output must be ASCII: {:?}",
+        String::from_utf8_lossy(&output)
+    );
+}

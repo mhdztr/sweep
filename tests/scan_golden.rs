@@ -73,13 +73,15 @@ fn scan_table_narrow_color() {
 #[test]
 fn scan_table_ascii() {
     // ASCII borders/glyphs; colors still on to prove the two axes compose.
-    insta::assert_snapshot!(render(
+    let output = render(
         120,
         Theme {
             color: true,
-            unicode: false
-        }
-    ));
+            unicode: false,
+        },
+    );
+    assert!(output.is_ascii(), "scan --no-unicode output:\n{output}");
+    insta::assert_snapshot!(output);
 }
 
 #[test]

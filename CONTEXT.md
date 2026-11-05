@@ -88,10 +88,9 @@ publishing from `main` without tags.
 *Context:* explicit user requirement; emoji break alignment and terminal
 portability.
 *Decision:* tier glyphs are ASCII `+ ! #` in every mode; no emoji anywhere in
-TUI output. Unicode box drawing stays, with `--no-unicode` for full ASCII
-**within the checklist renderer** (D16); `scan` output is not yet ASCII-clean
-under the flag (deferred, ROADMAP M3) (the dynamic-text half of that guarantee
-is enforced in `ui::render::sanitize`; see D16).
+TUI output. Unicode box drawing stays by default. `--no-unicode` makes all
+human-readable scan, rules-list, and checklist output ASCII, including dynamic
+text; JSON output is unchanged.
 *Consequences:* width math + the golden snapshots changed; the UI specs'
 examples were updated to ASCII in the same commit as the code (M2, first task).
 
@@ -114,15 +113,15 @@ control char (C0 `0x00-0x1f` incl. `ESC` `0x1b`, C1 `0x80-0x9f` incl. the
 char when `!theme.unicode`. Chars are **dropped**, not replaced with `?`: the
 sanitizer must never lengthen the string it hands the width/truncate math.
 `theme.unicode == true` keeps legitimate Unicode (accents, CJK, box drawing,
-`·`, `…`) unchanged; only controls go. Chrome-only lines are unchanged, since
-their content is module literals that are already ASCII-clean.
+`·`, `…`) unchanged; only controls go. Checklist chrome remains unchanged,
+since its content is module literals that are already ASCII-clean.
 *Rejected:* `?`-per-char substitution (lengthens the string; can overflow a full
 row and collapse it to a bare ellipsis, regression-tested); scoping the
 guarantee to chrome and "fixing the docs instead" (rejected by the reviewer)
-(this rejection applies to `ui::render.rs`; the CLI-wide claim is a separate,
-deferred item).
-*Consequences:* `docs/CLI-UX.md` §3/§8/§11 and this file now state exactly what
-`--no-unicode` guarantees; tests that claimed the invariant but used ASCII
+(this rejection applies to `ui::render.rs`; the sanitizer now also serves scan
+and rules-list human output).
+*Consequences:* `docs/CLI-UX.md` §1/§3/§8/§11 and this file state what
+`--no-unicode` guarantees; tests that claimed the checklist invariant but used ASCII
 fixtures (`src/ui/render.rs`, `tests/checklist_render.rs`) now carry a non-ASCII
 title **and** a non-ASCII guard reason and assert `frame.is_ascii()`; a new test
 asserts no `ESC`/C1/DEL byte survives under **either** unicode setting. A second
@@ -130,9 +129,9 @@ bug surfaced while testing the first: running `sanitize` over an already-painted
 line (the first footer draft) stripped the SGR introducer and left the CSI *body*
 (`[2m`) as visible text, so the sanitizer runs on content *before*
 `Theme` paints it. Scope: this guarantee is the **checklist renderer's**
-(`ui::render.rs`); `scan`'s pre-existing `ui/mod.rs` header/footer and
-`ui/table.rs` `—` placeholders are non-ASCII under the flag and are **not**
-covered; tracked as a ROADMAP M3 task (see D13).
+(`ui::render.rs`). The same sanitizer also protects scan-table dynamic text;
+header/footer separators and unavailable-value placeholders select ASCII forms
+under the flag, and `rules list` sanitizes detected-state text.
 
 **D14: The interactive checklist is hand-rolled; `inquire` is not its renderer.**
 *Context:* ROADMAP M2 and ARCHITECTURE §7 planned `inquire::MultiSelect` with a

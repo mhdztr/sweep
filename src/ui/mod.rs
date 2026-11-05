@@ -100,18 +100,25 @@ pub fn terminal_width() -> usize {
 /// content lines `c1` / `c3` (c2 dropped), hard-truncated to `width`.
 /// Returns the render ending in `\n\n` (blank line after the box).
 pub fn render_header(ctx: &Ctx, reclaimable: u64, width: usize, theme: &Theme) -> String {
-    let c1 = format!("sweep {} · storage cleaner", env!("CARGO_PKG_VERSION"));
+    let separator = if theme.unicode { " · " } else { " - " };
+    let c1 = format!(
+        "sweep {}{separator}storage cleaner",
+        env!("CARGO_PKG_VERSION")
+    );
     let c2 = format!(
-        "{} · {}",
+        "{}{separator}{}",
         ctx.system.distro_name.to_lowercase(),
         ctx.system.hostname
     );
     let c3 = format!(
-        "root: {} total · {} used · {} reclaimable",
+        "root: {} total{separator}{} used{separator}{} reclaimable",
         format_bytes(ctx.system.root_total),
         format_bytes(ctx.system.root_used),
         format_bytes(reclaimable)
     );
+    let c1 = render::sanitize(&c1, theme.unicode);
+    let c2 = render::sanitize(&c2, theme.unicode);
+    let c3 = render::sanitize(&c3, theme.unicode);
 
     if !theme.unicode || width < 60 {
         // Plain mode: c1 / c3, hard-truncated to the terminal width.
@@ -153,12 +160,13 @@ pub fn render_header(ctx: &Ctx, reclaimable: u64, width: usize, theme: &Theme) -
     )
 }
 
-/// Footer (exact plan §2.15 copy). Deliberately plain, `_theme` is accepted
-/// for signature stability but no color is applied (plan: "Plain").
+/// Footer (exact plan §2.15 copy). Deliberately plain; no color is applied
+/// (plan: "Plain"). Separators follow the resolved Unicode setting.
 /// Returned WITHOUT a trailing newline (callers `println!` it).
-pub fn render_footer(reclaimable: u64, regular: u64, scan_ms: u64, _theme: &Theme) -> String {
+pub fn render_footer(reclaimable: u64, regular: u64, scan_ms: u64, theme: &Theme) -> String {
+    let separator = if theme.unicode { " · " } else { " | " };
     format!(
-        "reclaimable: {} · regular preset selects: {} · scanned in {:.1}s",
+        "reclaimable: {}{separator}regular preset selects: {}{separator}scanned in {:.1}s",
         format_bytes(reclaimable),
         format_bytes(regular),
         scan_ms as f64 / 1000.0
@@ -203,7 +211,7 @@ mod tests {
             },
         );
         let lines: Vec<&str> = s.split('\n').collect();
-        assert_eq!(lines[0], "sweep 0.1.0 · storage cleaner");
+        assert_eq!(lines[0], "sweep 0.1.0 - storage cleaner");
         assert!(lines[1].starts_with("root: 1 TiB total"));
         assert_eq!(lines[2], "", "blank line after header");
         assert!(display_width(lines[0]) <= 40 && display_width(lines[1]) <= 40);
@@ -241,5 +249,40 @@ mod tests {
             render_footer(20_602, 20_602, 410, &t),
             "reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s"
         );
+    }
+
+    #[test]
+    fn no_unicode_header_and_footer_are_ascii_even_with_dynamic_host_text() {
+        let mut ctx = ctx();
+        ctx.system.distro_name = "Arch Linux 漢".into();
+        ctx.system.hostname = "hosté\u{1b}[2J".into();
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+        let header = render_header(&ctx, 20_602, 120, &theme);
+        let footer = render_footer(20_602, 20_602, 410, &theme);
+        assert!(header.is_ascii(), "{header:?}");
+        assert!(footer.is_ascii(), "{footer:?}");
+        assert!(footer.contains(" | "));
+    }
+
+    #[test]
+    fn unicode_header_preserves_unicode_but_strips_terminal_controls() {
+        let mut ctx = ctx();
+        ctx.system.distro_name = "Arch Linux 漢".into();
+        ctx.system.hostname = "hosté\u{1b}[2J".into();
+        let header = render_header(
+            &ctx,
+            20_602,
+            120,
+            &Theme {
+                color: false,
+                unicode: true,
+            },
+        );
+        assert!(header.contains("arch linux 漢"));
+        assert!(header.contains("hosté[2J"));
+        assert!(!header.contains('\u{1b}'));
     }
 }

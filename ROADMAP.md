@@ -179,11 +179,8 @@ Tasks:
       pages with Up/Down; one confirmation covers the full list and cleanup
       remains a single batched operation.
 - [ ] `rules list` command (states: ready/guarded/sudo/disabled/locked)
-- [ ] ASCII-clean `scan`/`rules list` output under `--no-unicode`: gate the pre-existing
-      `ui/mod.rs` header/footer `·` separators (`:101,:103,:108,:159`) and `ui/table.rs`
-      `—` placeholders (`:293,:301,:379,:389,:496,:560`) and `·` separators
-      (`:562,:570,:594,:597`) on `theme.unicode`; re-record
-      `scan_golden__scan_table_ascii.snap`. Deferred from R12/B2 (slice-2 cleanup).
+- [x] ASCII-clean `scan`/`rules list` output under `--no-unicode`, including
+      dynamic text; ASCII scan snapshot and output assertion updated.
 - [ ] Config: `[rules.*]` sections validated (known keys), `[presets]` honored
 - [ ] Tests per rule per catalog requirement + sub-row defaults + argv snapshots
 
