@@ -101,3 +101,7 @@ checklist. Never claim a check passed unless it was run in the current session.
 
 Commits use the required prefixes `docs:`, `fix:`, `feat:`, `chore:`, or
 `view:`. Pushes are always left to the maintainer.
+
+Commit attribution: never add a Copilot `Co-authored-by` trailer or other
+Copilot attribution to commit messages. Do not alter GitHub collaborators or
+repository permissions; leave access settings to the maintainer.
