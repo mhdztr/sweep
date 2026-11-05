@@ -58,12 +58,22 @@ tier = "caution"                  # safe|caution|destructive
 sudo = false
 ```
 
-**Validation:** unknown top-level keys warn (not fail), forward compatible;
+**Validation:** unknown top-level keys are ignored (not fail), forward compatible;
 unknown `[rules.<id>]` sections and unknown keys within known rule sections are
 errors with a suggestion when a close match exists; `[custom]` is validated
 strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
 `older_than_days` required ≥ 0, reserved prefixes `tmp-`, `pacman-` rejected).
 `[rules.orphans].confirm_batch` must be a positive integer when set.
+`[presets.safe]`, `[presets.regular]`, and `[presets.full]` accept `include`
+and `exclude` arrays containing registered rule ids; unknown presets, keys, or
+rule ids are errors with a close-match suggestion when available. Exclusions
+win if an id appears in both lists. Includes can preselect rules of any tier
+when that row is selectable; they do not unlock disabled, report-only, or
+destructive-locked rows and do not bypass any confirmation gate. In particular,
+caution rules still require P1/P2 and destructive rules retain the typed PURGE
+gate (unless the explicit `--i-know-what-im-doing` bypass is used). An included
+guarded row requires interactive P6 confirmation; scripted mode rejects it
+instead of bypassing that gate.
 
 ## 10. Custom rules semantics
 

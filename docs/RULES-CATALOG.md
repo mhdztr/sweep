@@ -4,9 +4,11 @@
 must always match it (CI snapshot enforces). Code changes without a same-commit
 update here are bugs.
 
-**Tiers:** `+` `safe` (checked in `safe`+`regular` presets) · `!` `caution`
-(visible, unchecked) · `#` `destructive` (`full` preset only, typed `PURGE`) · `~`
-report-only (no clean action ever).
+**Tiers:** `+` `safe` (checked in `safe`+`regular` unless excluded) · `!`
+`caution` (visible, unchecked unless included) · `#` `destructive` (locked
+outside `full`, typed `PURGE`; an include can preselect only after unlock) · `~`
+report-only (no clean action ever). `[presets.<name>]` includes/excludes modify
+selection defaults only; confirmation gates remain mandatory.
 
 **Field meanings:**
 - **Targets:** exact paths/globs (Arch; `detect()` substitutes elsewhere).

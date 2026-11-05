@@ -17,11 +17,13 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone, serde::Deserialize, Default)]
 #[serde(default)]
-// NO deny_unknown_fields: unknown keys warn later (M3+), never fail.
+// Unknown top-level sections remain forward-compatible; rule/preset sections
+// are validated explicitly in `load_from`.
 pub struct Config {
     pub general: GeneralConfig,
     pub scan: ScanConfig,
     pub rules: RulesConfig,
+    pub presets: PresetsConfig,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -117,6 +119,31 @@ pub struct RulesConfig {
     pub pkgcache_zero: RuleToggle,
     #[serde(rename = "purge-logs")]
     pub purge_logs: RuleToggle,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+#[serde(default)]
+pub struct PresetsConfig {
+    pub safe: PresetRuleConfig,
+    pub regular: PresetRuleConfig,
+    pub full: PresetRuleConfig,
+}
+
+impl PresetsConfig {
+    pub fn for_preset(&self, preset: crate::cli::Preset) -> &PresetRuleConfig {
+        match preset {
+            crate::cli::Preset::Safe => &self.safe,
+            crate::cli::Preset::Regular => &self.regular,
+            crate::cli::Preset::Full => &self.full,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+#[serde(default)]
+pub struct PresetRuleConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -350,12 +377,14 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
             message: parse_message(&text, &e),
         })?;
     validate_rule_sections(path, &document)?;
+    validate_preset_sections(path, &document)?;
     let config: Config = toml::from_str(&text).map_err(|e| ConfigError::Parse {
         path: path.to_path_buf(),
         message: parse_message(&text, &e),
     })?;
     match config.general.preset.as_str() {
         "safe" | "regular" | "full" => {
+            validate_preset_rule_ids(path, &config)?;
             if !crate::rules::journal_user::validate_max_size(&config.rules.journal_user.max_size) {
                 return Err(ConfigError::Parse {
                     path: path.to_path_buf(),
@@ -429,6 +458,78 @@ fn validate_rule_sections(path: &Path, document: &toml::Table) -> Result<(), Con
                     None => format!("unknown key '[rules.{rule}].{field}'"),
                 },
             });
+        }
+    }
+    Ok(())
+}
+
+fn validate_preset_sections(path: &Path, document: &toml::Table) -> Result<(), ConfigError> {
+    let Some(presets) = document.get("presets").and_then(toml::Value::as_table) else {
+        return Ok(());
+    };
+    const PRESET_NAMES: &[&str] = &["safe", "regular", "full"];
+    const PRESET_FIELDS: &[&str] = &["include", "exclude"];
+
+    for (name, value) in presets {
+        if !PRESET_NAMES.contains(&name.as_str()) {
+            let suggestion = closest_match(name, PRESET_NAMES);
+            return Err(ConfigError::Parse {
+                path: path.to_path_buf(),
+                message: match suggestion {
+                    Some(candidate) => {
+                        format!("unknown [presets] section '{name}'; did you mean '{candidate}'?")
+                    }
+                    None => format!("unknown [presets] section '{name}'"),
+                },
+            });
+        }
+        let Some(section) = value.as_table() else {
+            continue;
+        };
+        for field in section.keys() {
+            if PRESET_FIELDS.contains(&field.as_str()) {
+                continue;
+            }
+            let suggestion = closest_match(field, PRESET_FIELDS);
+            return Err(ConfigError::Parse {
+                path: path.to_path_buf(),
+                message: match suggestion {
+                    Some(candidate) => format!(
+                        "unknown key '[presets.{name}].{field}'; did you mean '{candidate}'?"
+                    ),
+                    None => format!("unknown key '[presets.{name}].{field}'"),
+                },
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_preset_rule_ids(path: &Path, config: &Config) -> Result<(), ConfigError> {
+    let registry = crate::rules::registry();
+    let known_ids: Vec<_> = registry.iter().map(|rule| rule.id()).collect();
+    for (preset, values) in [
+        ("safe", &config.presets.safe),
+        ("regular", &config.presets.regular),
+        ("full", &config.presets.full),
+    ] {
+        for (key, ids) in [("include", &values.include), ("exclude", &values.exclude)] {
+            for id in ids {
+                if known_ids.contains(&id.as_str()) {
+                    continue;
+                }
+                let suggestion = closest_match(id, &known_ids);
+                return Err(ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    message: match suggestion {
+                        Some(candidate) => format!(
+                            "unknown rule '{id}' in [presets.{preset}].{key}; \
+                             did you mean '{candidate}'?"
+                        ),
+                        None => format!("unknown rule '{id}' in [presets.{preset}].{key}"),
+                    },
+                });
+            }
         }
     }
     Ok(())
@@ -614,25 +715,52 @@ mod tests {
     #[test]
     fn unknown_rule_section_suggests_known_id() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let p = write(&dir, "config.toml", "[rules.thmubnails]\nenabled = false\n");
+        let p = write(&dir, "config.toml", "[rules.thumbnail]\nenabled = false\n");
         let error = load_from(Some(&p)).expect_err("unknown rule section");
         assert!(
             error
                 .to_string()
-                .contains("unknown [rules] section 'thmubnails'; did you mean 'thumbnails'?")
+                .contains("unknown [rules] section 'thumbnail'; did you mean 'thumbnails'?")
         );
     }
 
     #[test]
     fn unknown_rule_key_suggests_known_field() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let p = write(&dir, "config.toml", "[rules.tmp]\nenabeld = false\n");
+        let p = write(&dir, "config.toml", "[rules.tmp]\nenable = false\n");
         let error = load_from(Some(&p)).expect_err("unknown rule key");
         assert!(
             error
                 .to_string()
-                .contains("unknown key '[rules.tmp].enabeld'; did you mean 'enabled'?")
+                .contains("unknown key '[rules.tmp].enable'; did you mean 'enabled'?")
         );
+    }
+
+    #[test]
+    fn parses_preset_include_and_exclude() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(
+            &dir,
+            "config.toml",
+            "[presets.regular]\ninclude = [\"docker\"]\nexclude = [\"tmp\"]\n",
+        );
+        let config = load_from(Some(&p)).expect("valid preset lists");
+        assert_eq!(config.presets.regular.include, ["docker"]);
+        assert_eq!(config.presets.regular.exclude, ["tmp"]);
+    }
+
+    #[test]
+    fn unknown_preset_rule_id_suggests_known_id() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(
+            &dir,
+            "config.toml",
+            "[presets.regular]\ninclude = [\"thumbnail\"]\n",
+        );
+        let error = load_from(Some(&p)).expect_err("unknown preset rule id");
+        assert!(error.to_string().contains(
+            "unknown rule 'thumbnail' in [presets.regular].include; did you mean 'thumbnails'?"
+        ));
     }
 
     #[test]

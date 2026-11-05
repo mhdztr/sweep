@@ -6,6 +6,7 @@
 //! mode/keys live in `ui/tty.rs` (D15).
 
 use crate::cli::Preset;
+use crate::config::{PresetRuleConfig, PresetsConfig};
 use crate::rules::Tier;
 use crate::scan::RuleResult;
 use crate::ui::Theme;
@@ -25,9 +26,8 @@ const REPORT_ONLY_IDS: &[&str] = &[]; // kept for backward compat if needed
 pub enum RowState {
     /// Toggleable; `checked` is user-editable. Used for safe/caution/destructive-unlocked.
     Ready { checked: bool },
-    /// Guard held (browser running, etc.): shown, pre-unchecked, override allowed.
-    /// Slice 1: always `checked: false` at construction; `toggle` may set it true
-    /// (the P6 confirm is a *gate* concern, not the core's).
+    /// Guard held (browser running, etc.): shown, unchecked by default, override allowed.
+    /// A configured include may check it; P6 is still a gate concern.
     Guarded { reason: String, checked: bool },
     /// Destructive row outside `full`: visible, toggle refused.
     Locked,
@@ -77,8 +77,9 @@ pub struct Selection {
     rows: Vec<Row>,
     cursor: usize,
     preset: Preset,
-    /// Sticky CLI-level unlock (SAFETY §2 bypass column): destructive rows stay
-    /// unlocked-but-unchecked in **every** preset, including after `p` cycles.
+    presets: PresetsConfig,
+    /// Sticky CLI-level unlock (SAFETY §2 bypass column). Configured preset
+    /// defaults are reapplied after each `p` cycle.
     i_know_what_im_doing: bool,
 }
 
@@ -148,6 +149,25 @@ impl Selection {
         i_know_what_im_doing: bool,
         guards: &BTreeMap<&str, String>,
     ) -> Selection {
+        Self::new_with_presets(
+            results,
+            preset,
+            yes,
+            i_know_what_im_doing,
+            guards,
+            &PresetsConfig::default(),
+        )
+    }
+
+    /// Build a selection with user-configured per-preset defaults.
+    pub fn new_with_presets(
+        results: &[RuleResult],
+        preset: Preset,
+        yes: bool,
+        i_know_what_im_doing: bool,
+        guards: &BTreeMap<&str, String>,
+        presets: &PresetsConfig,
+    ) -> Selection {
         // `yes` is intentionally inert here (SAFETY §2 bypass applies at the
         // *gate*, not the checklist); name it so the intent is explicit.
         let _ = yes;
@@ -155,7 +175,11 @@ impl Selection {
         let mut rows: Vec<Row> = results
             .iter()
             .map(|r| {
-                let state = row_state_for(r, preset, i_know_what_im_doing, guards);
+                let state = apply_config_defaults(
+                    row_state_for(r, preset, i_know_what_im_doing, guards),
+                    r.id,
+                    presets.for_preset(preset),
+                );
                 Row {
                     id: r.id,
                     title: r.title,
@@ -178,6 +202,7 @@ impl Selection {
             cursor: 0,
             preset,
             i_know_what_im_doing,
+            presets: presets.clone(),
         }
     }
 
@@ -197,6 +222,7 @@ impl Selection {
             cursor: 0,
             preset,
             i_know_what_im_doing: false,
+            presets: PresetsConfig::default(),
         }
     }
 
@@ -294,7 +320,11 @@ impl Selection {
         self.preset = preset;
         let i_know = self.i_know_what_im_doing;
         for row in &mut self.rows {
-            row.state = apply_preset_to_state(&row.state, row.tier, preset, i_know);
+            row.state = apply_config_defaults(
+                apply_preset_to_state(&row.state, row.tier, preset, i_know),
+                row.id,
+                self.presets.for_preset(preset),
+            );
         }
     }
 
@@ -726,10 +756,12 @@ fn row_state_for(
 /// The default selection for a live, non-guarded, non-report-only row.
 ///
 /// Transcribed from SAFETY §2:
-/// - safe: checked in every preset (`--yes` is inert here)
-/// - caution: always unchecked
+/// - safe: checked by default in every preset (`--yes` is inert here)
+/// - caution: unchecked by default
 /// - destructive: locked outside `full`; unlocked-but-unchecked under `full`
 ///   or with `--i-know-what-im-doing`
+///
+/// User-configured includes/excludes are applied after this built-in baseline.
 fn default_state_for(tier: Tier, preset: Preset, i_know_what_im_doing: bool) -> RowState {
     match tier {
         Tier::Safe => RowState::Ready { checked: true },
@@ -748,7 +780,8 @@ fn default_state_for(tier: Tier, preset: Preset, i_know_what_im_doing: bool) -> 
 ///
 /// `i_know_what_im_doing` is sticky across preset cycles (SAFETY §2 bypass is a
 /// CLI-level unlock): destructive rows re-derive as unlocked-but-unchecked in
-/// every preset when the flag is set.
+/// every preset when the flag is set. User-configured defaults are applied
+/// after this state transition.
 fn apply_preset_to_state(
     state: &RowState,
     tier: Tier,
@@ -767,6 +800,7 @@ fn apply_preset_to_state(
                 checked: false,
             }
         }
+
         RowState::Disabled { reason } => RowState::Disabled {
             reason: reason.clone(),
         },
@@ -777,5 +811,20 @@ fn apply_preset_to_state(
         RowState::Ready { .. } | RowState::Locked => {
             default_state_for(tier, preset, i_know_what_im_doing)
         }
+    }
+}
+
+fn apply_config_defaults(state: RowState, id: &str, config: &PresetRuleConfig) -> RowState {
+    let checked = if config.exclude.iter().any(|excluded| excluded == id) {
+        Some(false)
+    } else if config.include.iter().any(|included| included == id) {
+        Some(true)
+    } else {
+        None
+    };
+    match (state, checked) {
+        (RowState::Ready { .. }, Some(checked)) => RowState::Ready { checked },
+        (RowState::Guarded { reason, .. }, Some(checked)) => RowState::Guarded { reason, checked },
+        (state, _) => state,
     }
 }

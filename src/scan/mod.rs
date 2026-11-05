@@ -315,16 +315,16 @@ pub fn run_with_candidates(
     }
 
     // Totals: reclaimable = Σ applied bytes (already net of overlaps);
-    // regular = Σ applied Safe bytes (config-preset includes arrive M3;
-    // identical to reclaimable in M1).
+    // regular reflects the configured regular-preset defaults.
     let reclaimable_bytes: u64 = results
         .iter()
         .filter(|r| r.applied)
         .map(|r| r.info.bytes)
         .sum();
+    let regular_preset = ctx.config.presets.for_preset(crate::cli::Preset::Regular);
     let regular_bytes: u64 = results
         .iter()
-        .filter(|r| r.applied && r.tier == Tier::Safe)
+        .filter(|r| selected_by_preset(r.id, r.tier, r.applied, r.report_only, regular_preset))
         .map(|r| r.info.bytes)
         .sum();
     let scan_ms = started.elapsed().map(|d| d.as_millis() as u64).unwrap_or(0);
@@ -336,5 +336,72 @@ pub fn run_with_candidates(
             regular_bytes,
             scan_ms,
         },
+    }
+}
+
+fn selected_by_preset(
+    id: &str,
+    tier: Tier,
+    applied: bool,
+    report_only: bool,
+    config: &crate::config::PresetRuleConfig,
+) -> bool {
+    if !applied || report_only || tier == Tier::Destructive {
+        return false;
+    }
+    if config.exclude.iter().any(|excluded| excluded == id) {
+        return false;
+    }
+    config.include.iter().any(|included| included == id) || tier == Tier::Safe
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regular_preset_total_respects_config_and_gates() {
+        let config = crate::config::PresetRuleConfig {
+            include: vec!["caution".into(), "safe".into()],
+            exclude: vec!["safe".into()],
+        };
+        assert!(selected_by_preset(
+            "caution",
+            Tier::Caution,
+            true,
+            false,
+            &config
+        ));
+        assert!(!selected_by_preset(
+            "safe",
+            Tier::Safe,
+            true,
+            false,
+            &config
+        ));
+        assert!(!selected_by_preset(
+            "disabled",
+            Tier::Safe,
+            false,
+            false,
+            &config
+        ));
+        assert!(!selected_by_preset(
+            "report",
+            Tier::Safe,
+            true,
+            true,
+            &config
+        ));
+        assert!(!selected_by_preset(
+            "destructive",
+            Tier::Destructive,
+            true,
+            false,
+            &crate::config::PresetRuleConfig {
+                include: vec!["destructive".into()],
+                exclude: Vec::new(),
+            }
+        ));
     }
 }

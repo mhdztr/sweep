@@ -183,7 +183,8 @@ Tasks:
 - [x] ASCII-clean `scan`/`rules list` output under `--no-unicode`, including
       dynamic text; ASCII scan snapshot and output assertion updated.
 - [x] Config: `[rules.*]` section names and keys validated with typo suggestions.
-- [ ] Config: `[presets]` include/exclude lists honored by selection defaults.
+- [x] Config: `[presets]` include/exclude lists honored by selection defaults;
+      existing confirmation and lock gates remain mandatory.
 - [ ] Tests per rule per catalog requirement + sub-row defaults + argv snapshots
 
 **Acceptance gate:**

@@ -99,6 +99,8 @@ Notes:
 - Table rows may append a dim `(…)` note inside the category cell: age-gate / overlap
   counts (`tmp & var-tmp  (1 newer than keep-days kept)`, `user caches  (excl. thumbnails)`).
   Golden output includes all M2 scan rows, including not-applicable rules.
+- The `regular preset selects` total reflects `[presets.regular].include` and
+  `exclude` (with exclusions taking precedence).
 - `-v` adds per-rule detail lines after the table.
 
 ### 2.2 `sweep clean`
@@ -124,8 +126,11 @@ progress → summary card → history append.
 > (`ui/confirm.rs`) using raw mode with signal handling. P1/P2 only proceed on
 > literal `y`/`Y`; Enter, Esc, `q`/`Q`, Ctrl-C, EOF, or any other input aborts
 > with `aborted, nothing was deleted` (exit 2). Scripted safe mode (`--yes` or
-> `--no-prompt`) skips the TTY and P1 prompt, takes preset-selected safe rows,
-> and records acknowledgments only for selected caution rows. Both paths build
+> `--no-prompt`) skips the TTY and P1 prompt, takes preset-selected rows, and
+> records acknowledgments only for selected caution rows. `[presets.<name>]`
+> include/exclude lists can override selection defaults; exclusions win, and
+> confirmation and lock gates remain in force. Scripted mode rejects included
+> guarded rows because it cannot perform P6. Both paths build
 > a plan from full eligible scan candidates, not the 20 display samples, and
 > write a summary plus history/logs for a real run. `--dry-run` prints up to 20
 > candidates per rule and an argv-shaped preview, then leaves the filesystem
@@ -275,6 +280,10 @@ column is specced but the slice-2 renderer does not print it yet).
 The cursor row is marked with `>` in its own left column (`  > [x] ···`,
 unmarked rows keep the column blank: `    [x] ···`).
 Row order: safe → caution → destructive → report-only (stable, docs-listed).
+`[presets.<name>]` include/exclude lists override these defaults before display;
+exclusions win. Cycling with `p` reapplies the destination preset's configured
+defaults. Configured selections do not bypass the tier locks or confirmation
+gates.
 
 ### 3.2 Keybindings
 | Key | Action |
@@ -290,7 +299,7 @@ Row order: safe → caution → destructive → report-only (stable, docs-listed
 | `?` | toggles help footer |
 
 ### 3.3 Row states
-`ready` (toggleable) · `guarded (reason)` (unchecked; toggling warns but allows →
+`ready` (toggleable) · `guarded (reason)` (unchecked unless included; toggling warns but allows →
 becomes caution-confirm) · `locked` (destructive outside full: toggle refused with
 hint "switch preset to full (p)") · `disabled by config` (gray, unselectable,
 shows `disabled in config`) · `report-only` (info row, no checkbox).

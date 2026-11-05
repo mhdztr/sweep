@@ -33,11 +33,11 @@ kernel/filesystem bugs.
 
 | Tier | Visible when | Default selection | Confirmations | Bypass |
 |---|---|---|---|---|
-| `+` safe | always (if detect=ready) | **checked** in `safe`+`regular` | **P1** shared summary (default N) | `--yes` |
-| `!` caution | always | **unchecked** | **P1** + **P2** per rule (list-first where data-bearing) | `--yes` |
-| `#` destructive | only under `full` preset | **locked → unlocked-but-unchecked** under full | **P1** + **P3 typed PURGE per category** | only `--i-know-what-im-doing` |
+| `+` safe | always (if detect=ready) | **checked** in `safe`+`regular`; preset include/exclude may override | **P1** shared summary (default N) | `--yes` |
+| `!` caution | always | **unchecked** by default; a preset include may select | **P1** + **P2** per rule (list-first where data-bearing) | `--yes` |
+| `#` destructive | only under `full` (unless explicit `--i-know-what-im-doing`) | **locked** outside full; **unlocked-but-unchecked** under full unless included | **P1** + **P3 typed PURGE per category** | only `--i-know-what-im-doing` |
 | `~` report-only | when applicable | n/a | never selectable | n/a |
-| guarded rows | always | unchecked | P6 if user overrides | n/a |
+| guarded rows | always | **unchecked** by default; a preset include may select | P6 remains required | n/a |
 
 **Phase invariants:**
 1. `scan` phase performs zero mutations (CI-verified: snapshot test asserts no
@@ -58,6 +58,9 @@ kernel/filesystem bugs.
    freed space. An accepted empty selection exits 0 with
    `nothing selected, exiting`; interactive abort still exits 2 with
    `aborted, nothing was deleted`.
+7. `[presets.<name>].include` and `exclude` alter only selection defaults;
+   exclusions win, and no configured default bypasses P1/P2/P3, P6, or the
+   destructive lock. `--yes` still never bypasses destructive gates.
 
 ## 3. Never-touch list (hardcoded; not configurable away)
 

@@ -90,12 +90,13 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
         color: ctx.flags.color,
         unicode: ctx.flags.unicode,
     };
-    let mut sel = Selection::new(
+    let mut sel = Selection::new_with_presets(
         &out.results,
         ctx.effective_preset(),
         ctx.flags.yes,
         ctx.flags.i_know_what_im_doing,
         &guards,
+        &ctx.config.presets,
     );
 
     if scripted {
@@ -103,6 +104,13 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
         if items.is_empty() {
             println!("{EMPTY_SELECTION_COPY}");
             return 0;
+        }
+        if let Some(item) = first_guard_override(&items) {
+            eprintln!(
+                "error: scripted selection includes guarded rule '{}'; run interactively for P6 confirmation",
+                item.id
+            );
+            return 1;
         }
         let gate_ack = caution_acknowledgements(&items, &out.results);
         return execute_selected(&ctx, &out.results, &items, gate_ack);
@@ -376,6 +384,10 @@ fn orphan_confirmation_entries(note: Option<&str>, count: u64) -> Option<Vec<Str
         .then_some(entries)
 }
 
+fn first_guard_override(items: &[Selected]) -> Option<&Selected> {
+    items.iter().find(|item| item.guard_overridden)
+}
+
 /// Whether a scan result survives `--only`/`--exclude` (CLI-UX section 2.2).
 ///
 /// `only` empty means "every rule"; `exclude` always wins, so an id listed in
@@ -471,6 +483,20 @@ mod tests {
         assert!(keep_rule("tmp", &none, &none));
         let excluded = ["tmp".to_string()];
         assert!(!keep_rule("tmp", &none, &excluded));
+    }
+
+    #[test]
+    fn scripted_mode_rejects_guard_overrides_without_p6() {
+        let selected = Selected {
+            id: "browser-cache",
+            bytes: 42,
+            needs_sudo: false,
+            guard_overridden: true,
+        };
+        assert_eq!(
+            first_guard_override(&[selected]).map(|item| item.id),
+            Some("browser-cache")
+        );
     }
 
     #[test]

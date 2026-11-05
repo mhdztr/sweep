@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 use sweep::cli::Preset;
+use sweep::config::{PresetRuleConfig, PresetsConfig};
 use sweep::rules::Tier;
 use sweep::scan::{RuleResult, ScanInfo};
 use sweep::ui::checklist::{Row, RowState, Selection};
@@ -103,6 +104,73 @@ fn destructive_unlocked_and_unchecked_under_full() {
     assert_eq!(sel.locked_count(), 0);
     assert!(sel.rows()[0].is_toggleable());
     assert_eq!(sel.selected_count(), 0, "unlocked but NOT checked");
+}
+
+#[test]
+fn configured_presets_override_selection_and_reapply_on_cycle() {
+    let results = vec![
+        rr("safe-a", Tier::Safe, true, 10),
+        rr("caut", Tier::Caution, true, 5),
+        rr("dang", Tier::Destructive, true, 100),
+    ];
+    let presets = PresetsConfig {
+        safe: PresetRuleConfig::default(),
+        regular: PresetRuleConfig {
+            include: vec!["caut".into()],
+            exclude: vec!["safe-a".into()],
+        },
+        full: PresetRuleConfig {
+            include: vec!["dang".into()],
+            exclude: Vec::new(),
+        },
+    };
+    let mut selection = Selection::new_with_presets(
+        &results,
+        Preset::Regular,
+        false,
+        false,
+        &BTreeMap::new(),
+        &presets,
+    );
+    assert_eq!(
+        state_of(&selection, "safe-a"),
+        &RowState::Ready { checked: false }
+    );
+    assert_eq!(
+        state_of(&selection, "caut"),
+        &RowState::Ready { checked: true }
+    );
+    assert_eq!(state_of(&selection, "dang"), &RowState::Locked);
+
+    selection.cycle_preset();
+    assert_eq!(selection.preset(), Preset::Full);
+    assert_eq!(
+        state_of(&selection, "dang"),
+        &RowState::Ready { checked: true }
+    );
+}
+
+#[test]
+fn configured_include_can_select_guarded_row_but_keeps_guard_state() {
+    let results = vec![rr("browser-cache", Tier::Safe, true, 5)];
+    let presets = PresetsConfig {
+        safe: PresetRuleConfig {
+            include: vec!["browser-cache".into()],
+            exclude: Vec::new(),
+        },
+        ..PresetsConfig::default()
+    };
+    let guards = guards(&[("browser-cache", "firefox running")]);
+    let selection =
+        Selection::new_with_presets(&results, Preset::Safe, false, false, &guards, &presets);
+    assert_eq!(
+        state_of(&selection, "browser-cache"),
+        &RowState::Guarded {
+            reason: "firefox running".into(),
+            checked: true,
+        }
+    );
+    assert!(selection.selected()[0].guard_overridden);
 }
 
 #[test]
