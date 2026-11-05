@@ -27,6 +27,26 @@ root: 1 TiB total · 512 GiB used · 20.1 KiB recla…
     — · — files
   + safe  state/junk
     — · — files
+  ! caut.  pacman cache
+    — · — files
+  ! caut.  journal (system)
+    — · — files
+  ! caut.  AUR/build
+    — · — files
+  ! caut.  orphans
+    — · — files
+  ! caut.  flatpak
+    — · — files
+  ! caut.  docker
+    — · — files
+  ! caut.  podman
+    — · — files
+  ! caut.  dev artifacts
+    0 B · 0 files
+  ! caut.  steam
+    — · — files
+  + safe  snapshots
+    — · — files
   ! caut.  coredumps (default off)
     — · — files
 reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s

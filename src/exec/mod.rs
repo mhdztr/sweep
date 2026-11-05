@@ -95,6 +95,16 @@ impl Plan {
                 "caution rules require per-rule confirmation".to_string(),
             ));
         }
+        if let Some(item) = self
+            .selected
+            .iter()
+            .find(|item| matches!(item.id, "flatpak-unused" | "docker" | "podman"))
+        {
+            return Err(ExecError::Other(format!(
+                "{} cleanup is not available in this build",
+                item.id
+            )));
+        }
         if self.selected.iter().any(|item| item.needs_sudo) {
             return Err(ExecError::Other(
                 "sudo system pass is not available in this build".to_string(),

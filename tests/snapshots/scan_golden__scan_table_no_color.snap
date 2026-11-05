@@ -7,20 +7,30 @@ expression: "render(120, Theme { color: false, unicode: true })"
 │  root: 1 TiB total · 512 GiB used · 20.1 KiB reclaimable │
 ╰──────────────────────────────────────────────────────────╯
 
- ┌─────────┬────────────────────────────────────────────────────┬─────────────────────────────────┬─────────┬───────┐
- │ tier    │ category                                           │ location                        │ size    │ files │
- ├─────────┼────────────────────────────────────────────────────┼─────────────────────────────────┼─────────┼───────┤
- │ + safe  │ tmp & var-tmp (1 newer than keep-days kept)        │ ~/.fake-tmp                     │ 3.2 KiB │     2 │
- │ + safe  │ user caches (excl. thumbnails)                     │ ~/.cache                        │ 9.8 KiB │     2 │
- │ + safe  │ thumbnails                                         │ ~/.cache                        │   5 KiB │     2 │
- │ + safe  │ trash                                              │ ~/.local/share/Trash            │ 2.1 KiB │     2 │
- │ + safe  │ journal (user) (user journal not found)            │ ~/.local/state/log/journal      │       — │     — │
- │ + safe  │ browser (browser caches not found)                 │ ~/.cache                        │       — │     — │
- │ + safe  │ editor (editor caches not found)                   │ ~/.config                       │       — │     — │
- │ + safe  │ dev tools (tool caches not found)                  │ ~/.cache                        │       — │     — │
- │ + safe  │ apps (app caches not found)                        │ ~/.cache                        │       — │     — │
- │ + safe  │ logs (rotated logs not found)                      │ ~/.fake-var-log                 │       — │     — │
- │ + safe  │ state/junk (crash reports not found)               │ ~/.local/state                  │       — │     — │
- │ ! caut. │ coredumps (default off) (user coredumps not found) │ ~/.local/state/libuuid/coredump │       — │     — │
- └─────────┴────────────────────────────────────────────────────┴─────────────────────────────────┴─────────┴───────┘
+ ┌─────────┬───────────────────────────────────────────────────────┬─────────────────────────────────┬─────────┬───────┐
+ │ tier    │ category                                              │ location                        │ size    │ files │
+ ├─────────┼───────────────────────────────────────────────────────┼─────────────────────────────────┼─────────┼───────┤
+ │ + safe  │ tmp & var-tmp (1 newer than keep-days kept)           │ ~/.fake-tmp                     │ 3.2 KiB │     2 │
+ │ + safe  │ user caches (excl. thumbnails)                        │ ~/.cache                        │ 9.8 KiB │     2 │
+ │ + safe  │ thumbnails                                            │ ~/.cache                        │   5 KiB │     2 │
+ │ + safe  │ trash                                                 │ ~/.local/share/Trash            │ 2.1 KiB │     2 │
+ │ + safe  │ journal (user) (user journal not found)               │ ~/.local/state/log/journal      │       — │     — │
+ │ + safe  │ browser (browser caches not found)                    │ ~/.cache                        │       — │     — │
+ │ + safe  │ editor (editor caches not found)                      │ ~/.config                       │       — │     — │
+ │ + safe  │ dev tools (tool caches not found)                     │ ~/.cache                        │       — │     — │
+ │ + safe  │ apps (app caches not found)                           │ ~/.cache                        │       — │     — │
+ │ + safe  │ logs (rotated logs not found)                         │ ~/.fake-var-log                 │       — │     — │
+ │ + safe  │ state/junk (crash reports not found)                  │ ~/.local/state                  │       — │     — │
+ │ ! caut. │ pacman cache                                          │ ~/.fake-var-cache/pacman/pkg    │       — │     — │
+ │ ! caut. │ journal (system)                                      │ ~/.fake-var-log/journal         │       — │     — │
+ │ ! caut. │ AUR/build (AUR build caches not found)                │ ~/.cache                        │       — │     — │
+ │ ! caut. │ orphans (external commands disabled in test context)  │ pacman                          │       — │     — │
+ │ ! caut. │ flatpak (external commands disabled in test context)  │ flatpak                         │       — │     — │
+ │ ! caut. │ docker (external commands disabled in test context)   │ docker                          │       — │     — │
+ │ ! caut. │ podman (external commands disabled in test context)   │ podman                          │       — │     — │
+ │ ! caut. │ dev artifacts                                         │ ~/                              │     0 B │     0 │
+ │ ! caut. │ steam (Steam shader caches not found)                 │ ~/.local/share/Steam            │       — │     — │
+ │ + safe  │ snapshots                                             │ /                               │       — │     — │
+ │ ! caut. │ coredumps (default off) (user coredumps not found)    │ ~/.local/state/libuuid/coredump │       — │     — │
+ └─────────┴───────────────────────────────────────────────────────┴─────────────────────────────────┴─────────┴───────┘
 reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s

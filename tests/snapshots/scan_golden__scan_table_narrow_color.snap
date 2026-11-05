@@ -21,6 +21,16 @@ expression: "render(80, Theme { color: true, unicode: true })"
  │ [38;2;76;175;80m+ safe[39m  │ apps                                                    │       — │
  │ [38;2;76;175;80m+ safe[39m  │ logs                                                    │       — │
  │ [38;2;76;175;80m+ safe[39m  │ state/junk                                              │       — │
+ │ [38;2;255;179;0m! caut.[39m │ pacman cache                                            │       — │
+ │ [38;2;255;179;0m! caut.[39m │ journal (system)                                        │       — │
+ │ [38;2;255;179;0m! caut.[39m │ AUR/build                                               │       — │
+ │ [38;2;255;179;0m! caut.[39m │ orphans                                                 │       — │
+ │ [38;2;255;179;0m! caut.[39m │ flatpak                                                 │       — │
+ │ [38;2;255;179;0m! caut.[39m │ docker                                                  │       — │
+ │ [38;2;255;179;0m! caut.[39m │ podman                                                  │       — │
+ │ [38;2;255;179;0m! caut.[39m │ dev artifacts                                           │     0 B │
+ │ [38;2;255;179;0m! caut.[39m │ steam                                                   │       — │
+ │ [38;2;76;175;80m+ safe[39m  │ snapshots                                               │       — │
  │ [38;2;255;179;0m! caut.[39m │ coredumps (default off)                                 │       — │
  └─────────┴─────────────────────────────────────────────────────────┴─────────┘
 reclaimable: 20.1 KiB · regular preset selects: 20.1 KiB · scanned in 0.4s

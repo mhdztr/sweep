@@ -216,7 +216,7 @@ impl Default for PacmanCacheConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            keep_versions: Some(2),
+            keep_versions: None,
         }
     }
 }
@@ -394,6 +394,18 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
                     message: "invalid [rules.journal-user].max_size".into(),
                 });
             }
+            if config
+                .rules
+                .journal_system
+                .max_size
+                .as_deref()
+                .is_some_and(|size| !crate::rules::journal_user::validate_max_size(size))
+            {
+                return Err(ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    message: "invalid [rules.journal-system].max_size".into(),
+                });
+            }
             Ok(config)
         }
         v => Err(ConfigError::Parse {
@@ -485,6 +497,22 @@ mod tests {
         let c = load_from(Some(&p)).expect("parse");
         assert_eq!(c.general.keep_days, 7);
         assert_eq!(c.rules.user_cache.keep, vec!["pip", "npm"]);
+    }
+
+    #[test]
+    fn invalid_system_journal_size_is_rejected() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(
+            &dir,
+            "config.toml",
+            "[rules.journal-system]\nmax_size = \"100M --vacuum-time=1s\"\n",
+        );
+        let error = load_from(Some(&p)).expect_err("invalid vacuum size");
+        assert!(
+            error
+                .to_string()
+                .contains("invalid [rules.journal-system].max_size")
+        );
     }
 
     #[test]

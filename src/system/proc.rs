@@ -59,12 +59,20 @@ pub fn matching_process_under(
     names: &[&str],
     roots: &[PathBuf],
 ) -> io::Result<Option<String>> {
+    let mut canonical_roots = Vec::new();
+    for root in roots {
+        match std::fs::canonicalize(root) {
+            Ok(root) => canonical_roots.push(root),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
     for process in processes(proc_root)? {
         if !names.contains(&process.comm.as_str()) {
             continue;
         }
         match std::fs::read_link(proc_root.join(process.pid.to_string()).join("cwd")) {
-            Ok(cwd) if roots.iter().any(|root| cwd.starts_with(root)) => {
+            Ok(cwd) if canonical_roots.iter().any(|root| cwd.starts_with(root)) => {
                 return Ok(Some(process.comm));
             }
             Ok(_) => {}
@@ -168,6 +176,33 @@ mod tests {
             )
             .as_deref(),
             Some("msedge")
+        );
+    }
+
+    #[test]
+    fn matching_process_under_only_matches_working_directories_in_roots() {
+        let proc = tempfile::tempdir().expect("proc root");
+        let process = proc.path().join("42");
+        std::fs::create_dir_all(&process).expect("process directory");
+        std::fs::write(process.join("comm"), "makepkg\n").expect("comm");
+
+        let checkout = tempfile::tempdir().expect("checkout");
+        let root_alias = proc.path().join("checkout");
+        std::os::unix::fs::symlink(checkout.path(), &root_alias).expect("root alias");
+        std::os::unix::fs::symlink(checkout.path(), process.join("cwd")).expect("cwd link");
+        assert_eq!(
+            matching_process_under(proc.path(), &["makepkg"], &[root_alias])
+                .expect("matching process"),
+            Some("makepkg".to_owned())
+        );
+
+        std::fs::remove_file(process.join("cwd")).expect("remove cwd link");
+        let unrelated = tempfile::tempdir().expect("unrelated directory");
+        std::os::unix::fs::symlink(unrelated.path(), process.join("cwd")).expect("cwd link");
+        assert_eq!(
+            matching_process_under(proc.path(), &["makepkg"], &[checkout.path().to_path_buf()])
+                .expect("matching process"),
+            None
         );
     }
 }

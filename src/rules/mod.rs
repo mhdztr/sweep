@@ -119,8 +119,9 @@ pub fn registry() -> Vec<Box<dyn Rule>> {
 pub fn scan_registry() -> Vec<Box<dyn Rule>> {
     let mut rules: Vec<_> = registry()
         .into_iter()
-        .filter(|rule| rule.tier() == Tier::Safe && !rule.report_only())
+        .filter(|rule| rule.tier() != Tier::Destructive && !rule.report_only())
         .collect();
+    rules.push(Box::new(snapshots::SnapshotsReportRule));
     rules.push(Box::new(xdg_state::XdgStateCoredumpsRule));
     rules
 }
@@ -153,6 +154,74 @@ pub(crate) fn child_dirs(path: &Path) -> Vec<std::path::PathBuf> {
                 .map(|_| entry.path())
         })
         .collect()
+}
+
+pub(crate) fn command_exists(command: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|directory| {
+            let candidate = directory.join(command);
+            std::fs::metadata(candidate).is_ok_and(|metadata| {
+                metadata.is_file() && {
+                    use std::os::unix::fs::PermissionsExt as _;
+                    metadata.permissions().mode() & 0o111 != 0
+                }
+            })
+        })
+    })
+}
+
+pub(crate) fn command_output(
+    command: &str,
+    args: &[&str],
+) -> std::io::Result<std::process::Output> {
+    std::process::Command::new(command).args(args).output()
+}
+
+pub(crate) fn command_success_timeout(
+    command: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> std::io::Result<bool> {
+    use std::process::Stdio;
+    let mut child = std::process::Command::new(command)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let started = std::time::Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status.success());
+        }
+        if started.elapsed() >= timeout {
+            child.kill()?;
+            let _ = child.wait()?;
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+pub(crate) fn parse_human_size(value: &str) -> Option<u64> {
+    let value = value.trim().trim_end_matches(',');
+    let split = value.find(|character: char| !character.is_ascii_digit() && character != '.')?;
+    let number: f64 = value[..split].parse().ok()?;
+    let unit = value[split..]
+        .trim()
+        .trim_end_matches("B")
+        .trim_end_matches('i')
+        .to_ascii_uppercase();
+    let power = match unit.as_str() {
+        "" => 0,
+        "K" => 1,
+        "M" => 2,
+        "G" => 3,
+        "T" => 4,
+        _ => return None,
+    };
+    let bytes = number * 1024_f64.powi(power);
+    (bytes.is_finite() && bytes >= 0.0 && bytes <= u64::MAX as f64).then_some(bytes.round() as u64)
 }
 
 pub(crate) fn scan_targets(

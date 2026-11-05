@@ -159,7 +159,11 @@ pub struct Ctx {
     pub tmp_roots: Vec<PathBuf>,
     pub proc_root: Option<PathBuf>,
     pub runtime_dir: PathBuf,
+    pub run_root: PathBuf,
     pub var_log_root: PathBuf,
+    pub var_cache_root: PathBuf,
+    pub project_root: Option<PathBuf>,
+    pub commands_enabled: bool,
 }
 
 impl Ctx {
@@ -193,7 +197,14 @@ impl Ctx {
             tmp_roots: vec![PathBuf::from("/tmp"), PathBuf::from("/var/tmp")],
             proc_root: Some(PathBuf::from("/proc")),
             runtime_dir: PathBuf::from(format!("/run/user/{uid}")),
+            run_root: PathBuf::from("/run"),
             var_log_root: PathBuf::from("/var/log"),
+            var_cache_root: PathBuf::from("/var/cache"),
+            project_root: std::env::current_exe()
+                .ok()
+                .and_then(|executable| executable.parent().map(PathBuf::from))
+                .and_then(|directory| find_project_root(&directory)),
+            commands_enabled: true,
         })
     }
 
@@ -204,7 +215,11 @@ impl Ctx {
             tmp_roots: vec![home.join(".fake-tmp"), home.join(".fake-var-tmp")],
             proc_root: None,
             runtime_dir: home.join(".fake-run"),
+            run_root: home.join(".fake-run-root"),
             var_log_root: home.join(".fake-var-log"),
+            var_cache_root: home.join(".fake-var-cache"),
+            project_root: None,
+            commands_enabled: false,
             home,
             config: Config::default(),
             system: SystemCtx::for_test(),
@@ -251,6 +266,13 @@ impl Ctx {
     }
 }
 
+fn find_project_root(directory: &std::path::Path) -> Option<PathBuf> {
+    directory
+        .ancestors()
+        .find(|ancestor| ancestor.join(".git").exists())
+        .map(std::path::Path::to_path_buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,6 +287,9 @@ mod tests {
             vec![home.join(".fake-tmp"), home.join(".fake-var-tmp")]
         );
         assert_eq!(ctx.run_id, "19700101T000000");
+        assert_eq!(ctx.var_cache_root, home.join(".fake-var-cache"));
+        assert_eq!(ctx.run_root, home.join(".fake-run-root"));
+        assert_eq!(ctx.project_root, None);
         assert_eq!(ctx.flags.keep_days, None);
         assert!(ctx.flags.unicode);
         assert!(!ctx.flags.color);

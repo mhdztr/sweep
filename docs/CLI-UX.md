@@ -133,7 +133,9 @@ progress → summary card → history append.
 > (exit 0); clean JSON remains refused (exit 1); destructive and sudo items
 > are rejected by plan validation. Caution items are also rejected unless
 > their P2 acknowledgment is recorded in the plan. P1 copy distinguishes
-> permanent deletion from staging. `--trash` stages eligible files and
+> permanent deletion from staging. `flatpak-unused`, `docker`, and `podman`
+> remain preview-only until their cleanup handlers are implemented. `--trash`
+> stages eligible files and
 > symlinks in XDG trash, except the trash and journal-vacuum rules, and reports
 > staged counts separately from reclaimed bytes. `--only`/`--exclude` are
 > applied before `Selection::new` and validated against the registry

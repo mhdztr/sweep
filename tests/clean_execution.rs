@@ -197,6 +197,29 @@ fn plan_validation_requires_caution_confirmation() {
 }
 
 #[test]
+fn plan_validation_refuses_unimplemented_external_cleanup_handlers() {
+    let mut plan = plan(Vec::new(), true);
+    for id in ["flatpak-unused", "docker", "podman"] {
+        plan.selected[0].id = id;
+        plan.selected[0].tier = Tier::Caution;
+        plan.gate_ack.insert(
+            id.into(),
+            GateAck {
+                purge_typed: false,
+                caution_confirmed: true,
+                at: std::time::SystemTime::now(),
+            },
+        );
+        assert_eq!(
+            plan.validate()
+                .expect_err("no external handler")
+                .to_string(),
+            format!("{id} cleanup is not available in this build")
+        );
+    }
+}
+
+#[test]
 fn execution_rechecks_tmp_age_and_cache_hot_window() {
     let dir = tempfile::tempdir().expect("home");
     let tmp_file = dir.path().join(".fake-tmp/recent.tmp");

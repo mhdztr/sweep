@@ -11,7 +11,7 @@ mod common;
 use serde_json::Value;
 use sweep::ctx::Ctx;
 
-const RULE_IDS: [&str; 12] = [
+const RULE_IDS: [&str; 22] = [
     "tmp",
     "user-cache",
     "thumbnails",
@@ -23,6 +23,16 @@ const RULE_IDS: [&str; 12] = [
     "app-caches",
     "log-rotate",
     "xdg-state-junk",
+    "pacman-cache",
+    "journal-system",
+    "aur-builds",
+    "orphans",
+    "flatpak-unused",
+    "docker",
+    "podman",
+    "dev-artifacts",
+    "steam-shader",
+    "snapshots-report",
     "xdg-state-coredumps",
 ];
 const RULE_KEYS: [&str; 11] = [
@@ -98,7 +108,19 @@ fn assert_schema_keys(v: &Value) {
         let id = r["id"].as_str().expect("id");
         assert_eq!(
             r["tier"],
-            if id == "xdg-state-coredumps" {
+            if matches!(
+                id,
+                "xdg-state-coredumps"
+                    | "pacman-cache"
+                    | "journal-system"
+                    | "aur-builds"
+                    | "orphans"
+                    | "flatpak-unused"
+                    | "docker"
+                    | "podman"
+                    | "dev-artifacts"
+                    | "steam-shader"
+            ) {
                 "caution"
             } else {
                 "safe"
@@ -106,7 +128,10 @@ fn assert_schema_keys(v: &Value) {
         );
         assert!(r["applied"].is_boolean());
         assert_eq!(r["reason"].is_null(), r["applied"]);
-        assert_eq!(r["needs_sudo"], false);
+        assert_eq!(
+            r["needs_sudo"],
+            matches!(id, "pacman-cache" | "journal-system" | "orphans")
+        );
         assert!(r["bytes"].is_u64() && r["files"].is_u64() && r["dirs"].is_u64());
         // Key always present; null only when the rule counted nothing (e.g.
         // an empty real /tmp in the CLI case).
