@@ -406,6 +406,13 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
                     message: "invalid [rules.journal-system].max_size".into(),
                 });
             }
+            if config.rules.orphans.confirm_batch == Some(0) {
+                return Err(ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    message: "invalid [rules.orphans].confirm_batch (expected a positive integer)"
+                        .into(),
+                });
+            }
             Ok(config)
         }
         v => Err(ConfigError::Parse {
@@ -512,6 +519,18 @@ mod tests {
             error
                 .to_string()
                 .contains("invalid [rules.journal-system].max_size")
+        );
+    }
+
+    #[test]
+    fn orphan_confirmation_batch_must_be_positive() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(&dir, "config.toml", "[rules.orphans]\nconfirm_batch = 0\n");
+        let error = load_from(Some(&p)).expect_err("zero-sized confirmation page");
+        assert!(
+            error
+                .to_string()
+                .contains("invalid [rules.orphans].confirm_batch")
         );
     }
 

@@ -234,11 +234,13 @@ report-only (no clean action ever).
 - **Detection:** `pacman -Qtdq` empty → Ready with 0 (shows `0 orphans`, disabled
   selection) or NotApplicable (choose: **Ready-0**, so the row explains "none found").
 - **Action:** `pacman -Rns -- <all pkgs>` in ONE invocation (batched; config
-  `confirm_batch` paginates the *display* only).
+  `confirm_batch` paginates the *display* only; Up/Down browses pages and one
+  `y` confirms the complete list without changing the execution batch).
 - **Guard:** none. **Sudo:** yes (system pass). **Extra safety:** `--print` mode in
   preview shows the full list + total installed size; confirm copy warns
   "removing orphans also removes their unused deps".
-- **Config:** `[rules.orphans] confirm_batch = 200`, `exclude = ["pkg1","pkg2"]`.
+- **Config:** `[rules.orphans] confirm_batch = 200` (must be positive),
+  `exclude = ["pkg1","pkg2"]`.
 - **Non-Arch:** absent (apt: *not* auto-mapped to `autoremove` in v0.1; see
   distro matrix note).
 - **Tests:** argv batch; exclude list honored; empty-orphans display state.

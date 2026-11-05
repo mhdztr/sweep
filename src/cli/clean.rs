@@ -200,7 +200,30 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                             .collect(),
                         needs_sudo: result.needs_sudo,
                     };
-                    confirm::confirm_rule_p2(&confirm_item, &theme)
+                    if result.id == "orphans" {
+                        let Some(packages) = orphan_confirmation_entries(
+                            result.info.note.as_deref(),
+                            result.info.files,
+                        ) else {
+                            eprintln!("error: orphan package list is unavailable for confirmation");
+                            return 1;
+                        };
+                        let batch_size = ctx
+                            .config
+                            .rules
+                            .orphans
+                            .confirm_batch
+                            .or_else(|| {
+                                crate::rules::registry()
+                                    .into_iter()
+                                    .find(|rule| rule.id() == result.id)
+                                    .and_then(|rule| rule.confirm_batch_size())
+                            })
+                            .unwrap_or(200);
+                        confirm::confirm_rule_p2_list(&confirm_item, &packages, batch_size, &theme)
+                    } else {
+                        confirm::confirm_rule_p2(&confirm_item, &theme)
+                    }
                 };
                 match outcome {
                     Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
@@ -343,6 +366,16 @@ fn caution_acknowledgements(
     acknowledgements
 }
 
+fn orphan_confirmation_entries(note: Option<&str>, count: u64) -> Option<Vec<String>> {
+    if count == 0 {
+        return Some(Vec::new());
+    }
+    let (_, entries) = note?.split_once(" · ")?;
+    let entries: Vec<_> = entries.split(", ").map(str::to_string).collect();
+    (entries.len() as u64 == count && entries.iter().all(|entry| !entry.is_empty()))
+        .then_some(entries)
+}
+
 /// Whether a scan result survives `--only`/`--exclude` (CLI-UX section 2.2).
 ///
 /// `only` empty means "every rule"; `exclude` always wins, so an id listed in
@@ -449,6 +482,20 @@ mod tests {
 
         let known = vec!["tmp".to_string()];
         assert_eq!(first_unknown_rule(&known, &none), None);
+    }
+
+    #[test]
+    fn orphan_confirmation_list_requires_a_complete_scan_note() {
+        assert_eq!(
+            orphan_confirmation_entries(Some("2 · alpha, beta"), 2),
+            Some(vec!["alpha".into(), "beta".into()])
+        );
+        assert_eq!(
+            orphan_confirmation_entries(Some("0 orphans found"), 0),
+            Some(vec![])
+        );
+        assert_eq!(orphan_confirmation_entries(Some("2 · alpha"), 2), None);
+        assert_eq!(orphan_confirmation_entries(None, 1), None);
     }
 
     #[test]

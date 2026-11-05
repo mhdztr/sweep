@@ -62,6 +62,7 @@ sudo = false
 unknown `[rules.<id>]` for a *known* rule = error with suggestion; `[custom]`
 validated strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
 `older_than_days` required ≥ 0, reserved prefixes `tmp-`, `pacman-` rejected).
+`[rules.orphans].confirm_batch` must be a positive integer when set.
 
 ## 10. Custom rules semantics
 
@@ -70,4 +71,3 @@ path name) → `scan` = walk each path applying glob at each level + age filter 
 `clean` = delete matched files (age-gated, symlinks unlinked only). Tier honored
 (including destructive → PURGE gate applies). `sudo=true` custom rules allowed but
 root path validation requires absolute expanded path outside `/etc,/usr,/boot`.
-

@@ -175,7 +175,9 @@ Tasks:
 - [ ] `rules/steam.rs`: `steam-shader`
 - [ ] `rules/snapshots.rs`: `snapshots-report` (report-only; never enters Plan)
 - [x] `ui/confirm.rs`: P2 per-rule confirms
-- [ ] List pagination (`confirm_batch`)
+- [x] List pagination (`confirm_batch`): orphan package list browses display
+      pages with Up/Down; one confirmation covers the full list and cleanup
+      remains a single batched operation.
 - [ ] `rules list` command (states: ready/guarded/sudo/disabled/locked)
 - [ ] ASCII-clean `scan`/`rules list` output under `--no-unicode`: gate the pre-existing
       `ui/mod.rs` header/footer `·` separators (`:101,:103,:108,:159`) and `ui/table.rs`

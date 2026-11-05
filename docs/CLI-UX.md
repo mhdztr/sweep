@@ -319,11 +319,18 @@ Typed `y`/`Y` only; **Enter = cancel**. Esc, `q`/`Q`, Ctrl-C, EOF, or any other 
 
 ### P2: per-caution-rule confirm (shown when a caution rule selected)
 ```
-  ! pacman package cache: paccache -rk2 (sudo)
-     6.7 GiB · 310 packages · keeping newest 2 versions
-     [y/N]
+  ! orphans (Orphaned packages): 0 B | 3 candidates
+     requires the system pass
+     removing orphans also removes their unused dependencies
+     packages 1-2 of 3 (Up/Down to browse)
+       alpha
+       beta
+  Press y to confirm all packages, or Enter/Esc to cancel
 ```
-List-first variants: orphans → paginated package list; flatpak → runtime list;
+The orphan list uses `[rules.orphans].confirm_batch` entries per display page;
+Up/Down changes pages, but `y` confirms the complete list in one system-pass
+operation. Canceling any page aborts before execution. List-first variants:
+flatpak → runtime list;
 docker → `docker system df` table; stopped containers/volumes → names.
 
 ### P3: typed PURGE gate (per destructive category; after P1)

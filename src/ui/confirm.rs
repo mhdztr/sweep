@@ -193,6 +193,31 @@ pub fn confirm_p2(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOut
 }
 
 pub fn render_rule_p2(item: &RuleConfirmItem, theme: &Theme) -> String {
+    render_rule_p2_page(item, &[], 0, 0, 0, theme, false)
+}
+
+pub fn render_rule_p2_list_page(
+    item: &RuleConfirmItem,
+    entries: &[String],
+    page: usize,
+    page_size: usize,
+    theme: &Theme,
+) -> String {
+    let page_size = page_size.max(1);
+    let page_count = entries.len().div_ceil(page_size);
+    let page = page.min(page_count.saturating_sub(1));
+    render_rule_p2_page(item, entries, page, page_size, page_count, theme, true)
+}
+
+fn render_rule_p2_page(
+    item: &RuleConfirmItem,
+    entries: &[String],
+    page: usize,
+    page_size: usize,
+    page_count: usize,
+    theme: &Theme,
+    list_first: bool,
+) -> String {
     let mut out = format!(
         "  ! {} ({}): {} | {} candidates\n",
         sanitize_text(item.id, theme.unicode),
@@ -203,22 +228,121 @@ pub fn render_rule_p2(item: &RuleConfirmItem, theme: &Theme) -> String {
     if item.needs_sudo {
         out.push_str("     requires the system pass\n");
     }
-    if let Some(note) = &item.note {
+    if item.id != "orphans"
+        && let Some(note) = &item.note
+    {
         out.push_str("     ");
         out.push_str(&sanitize_text(note, theme.unicode));
         out.push('\n');
+    }
+    if item.id == "orphans" {
+        out.push_str("     removing orphans also removes their unused dependencies\n");
+    }
+    if list_first {
+        let start = page * page_size;
+        let end = entries.len().min(start.saturating_add(page_size));
+        if page_count > 1 {
+            out.push_str(&format!(
+                "     packages {}-{} of {} (Up/Down to browse)\n",
+                start + 1,
+                end,
+                entries.len()
+            ));
+        } else {
+            out.push_str(&format!("     packages ({}):\n", entries.len()));
+        }
+        for entry in &entries[start..end] {
+            out.push_str("       ");
+            out.push_str(&sanitize_text(entry, theme.unicode));
+            out.push('\n');
+        }
     }
     for sample in item.samples.iter().take(20) {
         out.push_str("     ");
         out.push_str(&sanitize_text(sample, theme.unicode));
         out.push('\n');
     }
-    out.push_str("  Continue? [y/N] (cancel is default)\n");
+    if list_first && page_count > 1 {
+        out.push_str("  Press y to confirm all packages, or Enter/Esc to cancel\n");
+    } else {
+        out.push_str("  Continue? [y/N] (cancel is default)\n");
+    }
     out
 }
 
 pub fn confirm_rule_p2(item: &RuleConfirmItem, theme: &Theme) -> io::Result<ConfirmOutcome> {
     run_yes_no(&render_rule_p2(item, theme))
+}
+
+pub fn confirm_rule_p2_list(
+    item: &RuleConfirmItem,
+    entries: &[String],
+    page_size: usize,
+    theme: &Theme,
+) -> io::Result<ConfirmOutcome> {
+    if entries.is_empty() {
+        return confirm_rule_p2(item, theme);
+    }
+
+    if !std::io::stdin().is_terminal() {
+        return Err(io::Error::new(io::ErrorKind::NotConnected, NO_TTY_COPY));
+    }
+
+    let _signals = tty::arm()?;
+    // SAFETY: isatty only inspects the stdout file descriptor.
+    let stdout_is_tty = unsafe { libc::isatty(libc::STDOUT_FILENO) } == 1;
+    let output = stdout_is_tty.then_some(libc::STDOUT_FILENO);
+    let _guard = tty::RawMode::enter(output)?;
+    let page_size = page_size.max(1);
+    let page_count = entries.len().div_ceil(page_size);
+    let mut page = 0;
+    let mut decoder = tty::decoder();
+    let mut buf = [0u8; tty::READ_BUF];
+
+    loop {
+        if tty::interrupted() {
+            eprintln!("\n{ABORT_COPY}");
+            return Ok(ConfirmOutcome::Abort);
+        }
+        let prompt = render_rule_p2_list_page(item, entries, page, page_size, theme);
+        if stdout_is_tty {
+            print!("\x1b[2J\x1b[H{prompt}");
+        } else {
+            print!("{prompt}");
+        }
+        io::stdout().flush()?;
+
+        match tty::read_key_event(&mut decoder, &mut buf)? {
+            tty::Input::Closed => {
+                eprintln!("{ABORT_COPY}");
+                return Ok(ConfirmOutcome::Abort);
+            }
+            tty::Input::Idle => continue,
+            tty::Input::Key(Key::Yes) => return Ok(ConfirmOutcome::Proceed),
+            tty::Input::Key(Key::Down) => {
+                page = move_list_page(page, page_count, true);
+            }
+            tty::Input::Key(Key::Up) => {
+                page = move_list_page(page, page_count, false);
+            }
+            tty::Input::Key(Key::Enter | Key::Abort) => {
+                eprintln!("{ABORT_COPY}");
+                return Ok(ConfirmOutcome::Abort);
+            }
+            tty::Input::Key(_) => {
+                eprintln!("{ABORT_COPY}");
+                return Ok(ConfirmOutcome::Abort);
+            }
+        }
+    }
+}
+
+fn move_list_page(page: usize, page_count: usize, forward: bool) -> usize {
+    if forward {
+        page.saturating_add(1).min(page_count.saturating_sub(1))
+    } else {
+        page.saturating_sub(1)
+    }
 }
 
 pub fn render_p6(items: &[GuardConfirmItem], theme: &Theme) -> String {
@@ -364,5 +488,85 @@ mod tests {
         assert!(!prompt.contains('\u{1b}'));
         assert!(!prompt.contains('\u{7f}'));
         assert!(prompt.contains("Continue? [y/N]"));
+    }
+
+    #[test]
+    fn orphan_p2_pages_the_display_without_changing_the_confirmation_scope() {
+        let item = RuleConfirmItem {
+            id: "orphans",
+            title: "Orphaned packages",
+            bytes: 0,
+            files: 3,
+            note: Some("3 · alpha, beta, gamma".into()),
+            samples: Vec::new(),
+            needs_sudo: true,
+        };
+        let entries = vec!["alpha".into(), "beta".into(), "gamma".into()];
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+
+        let first = render_rule_p2_list_page(&item, &entries, 0, 2, &theme);
+        assert!(first.contains("packages 1-2 of 3"));
+        assert!(first.contains("alpha"));
+        assert!(first.contains("beta"));
+        assert!(!first.contains("gamma"));
+        assert!(first.contains("confirm all packages"));
+        assert!(first.contains("removes their unused dependencies"));
+
+        let last = render_rule_p2_list_page(&item, &entries, 1, 2, &theme);
+        assert!(last.contains("packages 3-3 of 3"));
+        assert!(last.contains("gamma"));
+        assert!(!last.contains("alpha"));
+    }
+
+    #[test]
+    fn list_pagination_handles_empty_and_zero_sized_pages() {
+        let item = RuleConfirmItem {
+            id: "orphans",
+            title: "Orphaned packages",
+            bytes: 0,
+            files: 0,
+            note: None,
+            samples: Vec::new(),
+            needs_sudo: true,
+        };
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+        assert!(render_rule_p2_list_page(&item, &[], 0, 0, &theme).contains("packages (0)"));
+        assert!(render_rule_p2_list_page(&item, &["alpha".into()], 0, 0, &theme).contains("alpha"));
+    }
+
+    #[test]
+    fn single_page_orphan_list_uses_the_standard_yes_no_prompt() {
+        let item = RuleConfirmItem {
+            id: "orphans",
+            title: "Orphaned packages",
+            bytes: 0,
+            files: 1,
+            note: None,
+            samples: Vec::new(),
+            needs_sudo: true,
+        };
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+        let prompt = render_rule_p2_list_page(&item, &["alpha".into()], 0, 10, &theme);
+        assert!(prompt.contains("packages (1):"));
+        assert!(prompt.contains("alpha"));
+        assert!(prompt.contains("Continue? [y/N]"));
+        assert!(!prompt.contains("Up/Down"));
+    }
+
+    #[test]
+    fn list_navigation_stays_within_page_bounds() {
+        assert_eq!(move_list_page(0, 3, false), 0);
+        assert_eq!(move_list_page(0, 3, true), 1);
+        assert_eq!(move_list_page(2, 3, true), 2);
+        assert_eq!(move_list_page(2, 3, false), 1);
     }
 }
