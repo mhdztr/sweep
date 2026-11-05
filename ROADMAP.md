@@ -182,7 +182,8 @@ Tasks:
       IDs, tiers, and sudo requirements checked against the catalog)
 - [x] ASCII-clean `scan`/`rules list` output under `--no-unicode`, including
       dynamic text; ASCII scan snapshot and output assertion updated.
-- [ ] Config: `[rules.*]` sections validated (known keys), `[presets]` honored
+- [x] Config: `[rules.*]` section names and keys validated with typo suggestions.
+- [ ] Config: `[presets]` include/exclude lists honored by selection defaults.
 - [ ] Tests per rule per catalog requirement + sub-row defaults + argv snapshots
 
 **Acceptance gate:**

@@ -343,45 +343,13 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
             }
         }
     })?;
-    // Basic validation of known rule keys under [rules.*] if present
-    if let Ok(table) = text.parse::<toml::Table>()
-        && let Some(toml::Value::Table(rules_tbl)) = table.get("rules")
-    {
-        let known = [
-            "tmp",
-            "user-cache",
-            "thumbnails",
-            "trash",
-            "journal-user",
-            "browser-cache",
-            "editor-cache",
-            "tool-caches",
-            "app-caches",
-            "log-rotate",
-            "xdg-state-junk",
-            "pacman-cache",
-            "journal-system",
-            "aur-builds",
-            "orphans",
-            "flatpak-unused",
-            "docker",
-            "podman",
-            "dev-artifacts",
-            "steam-shader",
-            "snapshots-report",
-            "downloads",
-            "cache-deep",
-            "tmp-full",
-            "pkgcache-zero",
-            "purge-logs",
-        ];
-        for k in rules_tbl.keys() {
-            if !known.contains(&k.as_str()) {
-                // Be lenient for forward compat; unknown keys remain ignored.
-            }
-        }
-        // [presets] honored if present
-    }
+    let document = text
+        .parse::<toml::Table>()
+        .map_err(|e| ConfigError::Parse {
+            path: path.to_path_buf(),
+            message: parse_message(&text, &e),
+        })?;
+    validate_rule_sections(path, &document)?;
     let config: Config = toml::from_str(&text).map_err(|e| ConfigError::Parse {
         path: path.to_path_buf(),
         message: parse_message(&text, &e),
@@ -420,6 +388,107 @@ pub fn load_from(path: Option<&Path>) -> Result<Config, ConfigError> {
             message: format!("invalid preset '{v}' (expected: safe, regular, full)"),
         }),
     }
+}
+
+fn validate_rule_sections(path: &Path, document: &toml::Table) -> Result<(), ConfigError> {
+    let Some(rules) = document.get("rules").and_then(toml::Value::as_table) else {
+        return Ok(());
+    };
+
+    for (rule, value) in rules {
+        let Some(fields) = rule_fields(rule) else {
+            let known_ids: Vec<_> = crate::rules::registry()
+                .iter()
+                .map(|rule| rule.id())
+                .collect();
+            let suggestion = closest_match(rule, &known_ids);
+            return Err(ConfigError::Parse {
+                path: path.to_path_buf(),
+                message: match suggestion {
+                    Some(candidate) => {
+                        format!("unknown [rules] section '{rule}'; did you mean '{candidate}'?")
+                    }
+                    None => format!("unknown [rules] section '{rule}'"),
+                },
+            });
+        };
+        let Some(section) = value.as_table() else {
+            continue;
+        };
+        for field in section.keys() {
+            if fields.contains(&field.as_str()) {
+                continue;
+            }
+            let suggestion = closest_match(field, fields);
+            return Err(ConfigError::Parse {
+                path: path.to_path_buf(),
+                message: match suggestion {
+                    Some(candidate) => {
+                        format!("unknown key '[rules.{rule}].{field}'; did you mean '{candidate}'?")
+                    }
+                    None => format!("unknown key '[rules.{rule}].{field}'"),
+                },
+            });
+        }
+    }
+    Ok(())
+}
+
+fn rule_fields(rule: &str) -> Option<&'static [&'static str]> {
+    const TOGGLE: &[&str] = &["enabled"];
+    const USER_CACHE: &[&str] = &["enabled", "keep"];
+    const JOURNAL_USER: &[&str] = &["enabled", "max_size"];
+    const TOOL_CACHES: &[&str] = &["enabled", "disable_tools"];
+    const APP_CACHES: &[&str] = &["enabled", "extra_paths"];
+    const PACMAN_CACHE: &[&str] = &["enabled", "keep_versions"];
+    const JOURNAL_SYSTEM: &[&str] = &["enabled", "max_size"];
+    const AUR_BUILDS: &[&str] = &["enabled", "keep_days"];
+    const ORPHANS: &[&str] = &["enabled", "confirm_batch", "exclude"];
+    const DEV_ARTIFACTS: &[&str] = &["enabled", "min_age_days", "paths"];
+    const DOWNLOADS: &[&str] = &["enabled", "keep_days"];
+
+    Some(match rule {
+        "user-cache" => USER_CACHE,
+        "journal-user" => JOURNAL_USER,
+        "tool-caches" => TOOL_CACHES,
+        "app-caches" => APP_CACHES,
+        "pacman-cache" => PACMAN_CACHE,
+        "journal-system" => JOURNAL_SYSTEM,
+        "aur-builds" => AUR_BUILDS,
+        "orphans" => ORPHANS,
+        "dev-artifacts" => DEV_ARTIFACTS,
+        "downloads" => DOWNLOADS,
+        "tmp" | "thumbnails" | "trash" | "browser-cache" | "editor-cache" | "log-rotate"
+        | "xdg-state-junk" | "flatpak-unused" | "docker" | "podman" | "steam-shader"
+        | "snapshots-report" | "cache-deep" | "tmp-full" | "pkgcache-zero" | "purge-logs" => TOGGLE,
+        _ => return None,
+    })
+}
+
+fn closest_match<'a>(input: &str, candidates: &'a [&str]) -> Option<&'a str> {
+    let (candidate, distance) = candidates
+        .iter()
+        .map(|candidate| (*candidate, edit_distance(input, candidate)))
+        .min_by_key(|(_, distance)| *distance)?;
+    let threshold = (input.chars().count() / 3).max(2);
+    (distance <= threshold).then_some(candidate)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let right: Vec<_> = right.chars().collect();
+    let mut row: Vec<_> = (0..=right.len()).collect();
+    for (i, left_char) in left.chars().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, right_char) in right.iter().enumerate() {
+            let previous = row[j + 1];
+            row[j + 1] = (row[j + 1] + 1)
+                .min(row[j] + 1)
+                .min(diagonal + usize::from(left_char != *right_char));
+            diagonal = previous;
+        }
+    }
+    row[right.len()]
 }
 
 /// Render a `toml::de::Error` as `{line}: {message}` (line from the error
@@ -535,15 +604,35 @@ mod tests {
     }
 
     #[test]
-    fn unknown_keys_ignored_forward_compatible() {
+    fn unknown_top_level_sections_remain_forward_compatible() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let p = write(
-            &dir,
-            "config.toml",
-            "[future-section]\nunknown = true\n\n[rules.tmp]\nenabled = false\nextra_key = 1\n",
-        );
+        let p = write(&dir, "config.toml", "[future-section]\nunknown = true\n");
         let c = load_from(Some(&p)).expect("parse");
-        assert!(!c.rules.tmp.enabled);
+        assert!(c.rules.tmp.enabled);
+    }
+
+    #[test]
+    fn unknown_rule_section_suggests_known_id() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(&dir, "config.toml", "[rules.thmubnails]\nenabled = false\n");
+        let error = load_from(Some(&p)).expect_err("unknown rule section");
+        assert!(
+            error
+                .to_string()
+                .contains("unknown [rules] section 'thmubnails'; did you mean 'thumbnails'?")
+        );
+    }
+
+    #[test]
+    fn unknown_rule_key_suggests_known_field() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = write(&dir, "config.toml", "[rules.tmp]\nenabeld = false\n");
+        let error = load_from(Some(&p)).expect_err("unknown rule key");
+        assert!(
+            error
+                .to_string()
+                .contains("unknown key '[rules.tmp].enabeld'; did you mean 'enabled'?")
+        );
     }
 
     #[test]

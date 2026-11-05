@@ -59,8 +59,9 @@ sudo = false
 ```
 
 **Validation:** unknown top-level keys warn (not fail), forward compatible;
-unknown `[rules.<id>]` for a *known* rule = error with suggestion; `[custom]`
-validated strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
+unknown `[rules.<id>]` sections and unknown keys within known rule sections are
+errors with a suggestion when a close match exists; `[custom]` is validated
+strictly (id regex `^[a-z0-9-]{3,40}$`, tier enum, ≥1 path, glob compiles,
 `older_than_days` required ≥ 0, reserved prefixes `tmp-`, `pacman-` rejected).
 `[rules.orphans].confirm_batch` must be a positive integer when set.
 
