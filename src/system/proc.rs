@@ -15,6 +15,7 @@ pub const EDITORS: &[&str] = &[
     "telegram-desktop",
 ];
 pub const APP_CACHES: &[&str] = &["obsidian", "signal", "telegram-desktop"];
+pub const STEAM: &[&str] = &["steam", "steamwebhelper"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessInfo {
@@ -51,6 +52,27 @@ pub fn matching_process(processes: &[ProcessInfo], names: &[&str]) -> Option<Str
         .iter()
         .find(|process| names.contains(&process.comm.as_str()))
         .map(|process| process.comm.clone())
+}
+
+pub fn matching_process_under(
+    proc_root: &Path,
+    names: &[&str],
+    roots: &[PathBuf],
+) -> io::Result<Option<String>> {
+    for process in processes(proc_root)? {
+        if !names.contains(&process.comm.as_str()) {
+            continue;
+        }
+        match std::fs::read_link(proc_root.join(process.pid.to_string()).join("cwd")) {
+            Ok(cwd) if roots.iter().any(|root| cwd.starts_with(root)) => {
+                return Ok(Some(process.comm));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(None)
 }
 
 pub fn open_files(proc_root: &Path) -> io::Result<BTreeSet<PathBuf>> {

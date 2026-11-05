@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use assert_cmd::Command;
 use predicates::prelude::*;
 use sweep::ctx::Ctx;
-use sweep::exec::{self, ExitCode, Plan, PlanItem};
+use sweep::exec::{self, ExitCode, GateAck, Plan, PlanItem};
 use sweep::rules::Tier;
 
 fn plan(paths: Vec<PathBuf>, dry_run: bool) -> Plan {
@@ -169,6 +169,31 @@ fn plan_validation_rejects_destructive_and_sudo_items() {
     let mut sudo = plan(Vec::new(), true);
     sudo.selected[0].needs_sudo = true;
     assert!(exec::execute(&Ctx::for_test(PathBuf::from("/tmp")), &sudo).is_err());
+}
+
+#[test]
+fn plan_validation_requires_caution_confirmation() {
+    let dir = tempfile::tempdir().expect("home");
+    let ctx = Ctx::for_test(dir.path().to_path_buf());
+    let mut caution = plan(Vec::new(), true);
+    caution.selected[0].id = "steam-shader";
+    caution.selected[0].tier = Tier::Caution;
+
+    let error = exec::execute(&ctx, &caution).expect_err("P2 acknowledgment required");
+    assert_eq!(
+        error.to_string(),
+        "caution rules require per-rule confirmation"
+    );
+
+    caution.gate_ack.insert(
+        "steam-shader".into(),
+        GateAck {
+            purge_typed: false,
+            caution_confirmed: true,
+            at: std::time::SystemTime::now(),
+        },
+    );
+    exec::execute(&ctx, &caution).expect("confirmed caution plan");
 }
 
 #[test]

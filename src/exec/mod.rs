@@ -41,6 +41,7 @@ impl From<ExitCode> for i32 {
 #[derive(Debug, Clone)]
 pub struct GateAck {
     pub purge_typed: bool,
+    pub caution_confirmed: bool,
     pub at: SystemTime,
 }
 
@@ -81,6 +82,17 @@ impl Plan {
         {
             return Err(ExecError::Other(
                 "destructive rules require the typed PURGE gate".to_string(),
+            ));
+        }
+        if self.selected.iter().any(|item| {
+            item.tier == Tier::Caution
+                && !self
+                    .gate_ack
+                    .get(item.id)
+                    .is_some_and(|ack| ack.caution_confirmed)
+        }) {
+            return Err(ExecError::Other(
+                "caution rules require per-rule confirmation".to_string(),
             ));
         }
         if self.selected.iter().any(|item| item.needs_sudo) {

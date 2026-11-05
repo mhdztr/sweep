@@ -95,6 +95,7 @@ pub fn remove_items(
         "browser-cache" => Some(crate::system::proc::BROWSERS),
         "editor-cache" => Some(crate::system::proc::EDITORS),
         "app-caches" => Some(crate::system::proc::APP_CACHES),
+        "steam-shader" => Some(crate::system::proc::STEAM),
         _ => None,
     };
     if let Some(names) = process_guard {
@@ -118,6 +119,47 @@ pub fn remove_items(
                     });
                 }
             }
+            Err(error) => {
+                return Ok(ItemReport {
+                    id: item.id,
+                    freed: 0,
+                    removed: 0,
+                    staged: 0,
+                    skipped: vec![format!("process state unavailable: {error}")],
+                    errors,
+                });
+            }
+        }
+    }
+    if item.id == "aur-builds" {
+        let process_result = ctx
+            .proc_root
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("process state unavailable"))
+            .and_then(|proc_root| {
+                crate::system::proc::matching_process_under(
+                    proc_root,
+                    &["makepkg", "git"],
+                    &[
+                        ctx.home.join(".cache/paru/clone"),
+                        ctx.home.join(".cache/yay"),
+                    ],
+                )
+            });
+        match process_result {
+            Ok(Some(name)) => {
+                return Ok(ItemReport {
+                    id: item.id,
+                    freed: 0,
+                    removed: 0,
+                    staged: 0,
+                    skipped: vec![format!(
+                        "{name} running in an AUR checkout (guard re-check)"
+                    )],
+                    errors,
+                });
+            }
+            Ok(None) => {}
             Err(error) => {
                 return Ok(ItemReport {
                     id: item.id,

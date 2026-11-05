@@ -162,6 +162,7 @@ Tasks:
 ## M3: Caution rule library
 **Goal:** all 9 selectable caution rules implemented with list-first confirms.
 **Depends on:** M2.
+**Implementation status:** in progress; per-rule P2 confirmation is in place.
 
 Tasks:
 - [ ] `rules/pkg.rs`: `pacman-cache` (paccache argv, keep_versions, unprivileged scan),
@@ -173,7 +174,8 @@ Tasks:
       progress, top-20 preview, self-exclusion, exclude_paths
 - [ ] `rules/steam.rs`: `steam-shader`
 - [ ] `rules/snapshots.rs`: `snapshots-report` (report-only; never enters Plan)
-- [ ] `ui/confirm.rs`: P2 per-rule confirms + list pagination (`confirm_batch`)
+- [x] `ui/confirm.rs`: P2 per-rule confirms
+- [ ] List pagination (`confirm_batch`)
 - [ ] `rules list` command (states: ready/guarded/sudo/disabled/locked)
 - [ ] ASCII-clean `scan`/`rules list` output under `--no-unicode`: gate the pre-existing
       `ui/mod.rs` header/footer `·` separators (`:101,:103,:108,:159`) and `ui/table.rs`

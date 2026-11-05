@@ -33,6 +33,17 @@ pub struct GuardConfirmItem {
     pub reason: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct RuleConfirmItem {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub bytes: u64,
+    pub files: u64,
+    pub note: Option<String>,
+    pub samples: Vec<String>,
+    pub needs_sudo: bool,
+}
+
 fn tier_for_id(id: &str) -> Tier {
     for rule in registry() {
         if rule.id() == id {
@@ -181,6 +192,35 @@ pub fn confirm_p2(items: &[ConfirmItem], theme: &Theme) -> io::Result<ConfirmOut
     run_yes_no(&render_p2(items, theme))
 }
 
+pub fn render_rule_p2(item: &RuleConfirmItem, theme: &Theme) -> String {
+    let mut out = format!(
+        "  ! {} ({}): {} | {} candidates\n",
+        sanitize_text(item.id, theme.unicode),
+        sanitize_text(item.title, theme.unicode),
+        format_bytes(item.bytes),
+        item.files
+    );
+    if item.needs_sudo {
+        out.push_str("     requires the system pass\n");
+    }
+    if let Some(note) = &item.note {
+        out.push_str("     ");
+        out.push_str(&sanitize_text(note, theme.unicode));
+        out.push('\n');
+    }
+    for sample in item.samples.iter().take(20) {
+        out.push_str("     ");
+        out.push_str(&sanitize_text(sample, theme.unicode));
+        out.push('\n');
+    }
+    out.push_str("  Continue? [y/N] (cancel is default)\n");
+    out
+}
+
+pub fn confirm_rule_p2(item: &RuleConfirmItem, theme: &Theme) -> io::Result<ConfirmOutcome> {
+    run_yes_no(&render_rule_p2(item, theme))
+}
+
 pub fn render_p6(items: &[GuardConfirmItem], theme: &Theme) -> String {
     let mut out = String::from("  Warning: selected caches belong to running applications.\n");
     for item in items {
@@ -300,5 +340,29 @@ mod tests {
         let p2 = render_p2(&[item], &theme);
         assert!(p2.contains("may be needed for crash analysis"));
         assert!(p2.contains("will be staged in XDG trash"));
+    }
+
+    #[test]
+    fn caution_p2_shows_measured_details_and_sanitizes_dynamic_text() {
+        let item = RuleConfirmItem {
+            id: "dev-artifacts",
+            title: "Stale build artifacts",
+            bytes: 2048,
+            files: 3,
+            note: Some("fresh\u{1b}[31m data".into()),
+            samples: vec!["~/Projects/demo/target\u{7f}".into()],
+            needs_sudo: false,
+        };
+        let theme = Theme {
+            color: false,
+            unicode: false,
+        };
+        let prompt = render_rule_p2(&item, &theme);
+        assert!(prompt.contains("2 KiB | 3 candidates"));
+        assert!(prompt.contains("fresh[31m data"));
+        assert!(prompt.contains("~/Projects/demo/target"));
+        assert!(!prompt.contains('\u{1b}'));
+        assert!(!prompt.contains('\u{7f}'));
+        assert!(prompt.contains("Continue? [y/N]"));
     }
 }

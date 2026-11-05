@@ -120,21 +120,24 @@ execution progress → summary card (§2.2b) → history append.
 progress → summary card → history append.
 
 > **Implementation status:** the interactive path runs the §3 checklist, then
-> the P1 summary gate (`ui/confirm.rs`) using raw mode with signal handling.
-> Only literal `y`/`Y` proceeds; Enter, Esc, `q`/`Q`, Ctrl-C, EOF, or any other
-> input aborts with `aborted, nothing was deleted` (exit 2). Scripted safe mode
-> (`--yes` or `--no-prompt`) skips the TTY and P1 prompt, takes preset-selected
-> safe rows, and executes them. Both paths build a plan from full eligible scan
-> candidates, not the 20 display samples, and write a summary plus history/logs
-> for a real run. `--dry-run` prints up to 20 candidates per rule and an
-> argv-shaped preview, then leaves the filesystem and state unchanged. An empty
-> selection prints `nothing selected, exiting` (exit 0); clean JSON remains
-> refused (exit 1); destructive and sudo items are rejected by plan validation.
-> P1 copy distinguishes permanent deletion from staging. `--trash` stages
-> eligible files and symlinks in XDG trash, except the trash
-> and journal-vacuum rules, and reports staged counts separately from reclaimed
-> bytes. `--only`/`--exclude` are applied before `Selection::new` and
-> validated against the registry (`error: unknown rule '<id>'`, exit 1).
+> P6 and per-rule P2 confirmations as needed, followed by the P1 summary gate
+> (`ui/confirm.rs`) using raw mode with signal handling. P1/P2 only proceed on
+> literal `y`/`Y`; Enter, Esc, `q`/`Q`, Ctrl-C, EOF, or any other input aborts
+> with `aborted, nothing was deleted` (exit 2). Scripted safe mode (`--yes` or
+> `--no-prompt`) skips the TTY and P1 prompt, takes preset-selected safe rows,
+> and records acknowledgments only for selected caution rows. Both paths build
+> a plan from full eligible scan candidates, not the 20 display samples, and
+> write a summary plus history/logs for a real run. `--dry-run` prints up to 20
+> candidates per rule and an argv-shaped preview, then leaves the filesystem
+> and state unchanged. An empty selection prints `nothing selected, exiting`
+> (exit 0); clean JSON remains refused (exit 1); destructive and sudo items
+> are rejected by plan validation. Caution items are also rejected unless
+> their P2 acknowledgment is recorded in the plan. P1 copy distinguishes
+> permanent deletion from staging. `--trash` stages eligible files and
+> symlinks in XDG trash, except the trash and journal-vacuum rules, and reports
+> staged counts separately from reclaimed bytes. `--only`/`--exclude` are
+> applied before `Selection::new` and validated against the registry
+> (`error: unknown rule '<id>'`, exit 1).
 
 #### 2.2b Summary card (every clean run)
 ```

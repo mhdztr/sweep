@@ -12,7 +12,7 @@
 
 use crate::cli::Root;
 use crate::ctx::Ctx;
-use crate::exec::{self, Plan, PlanItem};
+use crate::exec::{self, GateAck, Plan, PlanItem};
 use crate::scan::{self, ScanEvent};
 use crate::ui::Theme;
 use crate::ui::checklist::{Outcome, Selected, Selection, run_interactive};
@@ -104,7 +104,8 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
             println!("{EMPTY_SELECTION_COPY}");
             return 0;
         }
-        return execute_selected(&ctx, &out.results, &items);
+        let gate_ack = caution_acknowledgements(&items, &out.results);
+        return execute_selected(&ctx, &out.results, &items, gate_ack);
     }
 
     match run_interactive(&mut sel, &theme) {
@@ -162,13 +163,46 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                     Ok(ConfirmOutcome::Proceed) => {}
                 }
             }
-            let caution_items: Vec<_> = confirm_items
-                .iter()
-                .filter(|item| item.id == "xdg-state-coredumps")
-                .cloned()
-                .collect();
-            if !caution_items.is_empty() {
-                match confirm::confirm_p2(&caution_items, &theme) {
+            let mut gate_ack = BTreeMap::new();
+            for item in &items {
+                let Some(result) = out.results.iter().find(|result| result.id == item.id) else {
+                    eprintln!("error: selected rule '{}' has no scan result", item.id);
+                    return 1;
+                };
+                if result.tier != crate::rules::Tier::Caution {
+                    continue;
+                }
+                let outcome = if item.id == "xdg-state-coredumps" {
+                    let Some(confirm_item) = confirm_items
+                        .iter()
+                        .find(|confirm_item| confirm_item.id == item.id)
+                        .cloned()
+                    else {
+                        eprintln!(
+                            "error: selected rule '{}' has no confirmation data",
+                            item.id
+                        );
+                        return 1;
+                    };
+                    confirm::confirm_p2(&[confirm_item], &theme)
+                } else {
+                    let confirm_item = confirm::RuleConfirmItem {
+                        id: result.id,
+                        title: result.title,
+                        bytes: result.info.bytes,
+                        files: result.info.files,
+                        note: result.info.note.clone(),
+                        samples: result
+                            .info
+                            .samples
+                            .iter()
+                            .map(|path| path.display().to_string())
+                            .collect(),
+                        needs_sudo: result.needs_sudo,
+                    };
+                    confirm::confirm_rule_p2(&confirm_item, &theme)
+                };
+                match outcome {
                     Err(e) if e.kind() == std::io::ErrorKind::NotConnected => {
                         eprintln!("{NO_TTY_COPY}");
                         return 1;
@@ -178,7 +212,16 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                         return 1;
                     }
                     Ok(ConfirmOutcome::Abort) => return 2,
-                    Ok(ConfirmOutcome::Proceed) => {}
+                    Ok(ConfirmOutcome::Proceed) => {
+                        gate_ack.insert(
+                            item.id.to_string(),
+                            GateAck {
+                                purge_typed: false,
+                                caution_confirmed: true,
+                                at: std::time::SystemTime::now(),
+                            },
+                        );
+                    }
                 }
             }
             match confirm::confirm_p1(&confirm_items, &theme) {
@@ -191,7 +234,9 @@ pub fn run(root: Root, only: &[String], exclude: &[String], no_prompt: bool) -> 
                     1
                 }
                 Ok(ConfirmOutcome::Abort) => 2,
-                Ok(ConfirmOutcome::Proceed) => execute_selected(&ctx, &out.results, &items),
+                Ok(ConfirmOutcome::Proceed) => {
+                    execute_selected(&ctx, &out.results, &items, gate_ack)
+                }
             }
         }
     }
@@ -208,14 +253,37 @@ fn process_guards(ctx: &Ctx) -> BTreeMap<&'static str, String> {
                 ("browser-cache", crate::system::proc::BROWSERS),
                 ("editor-cache", crate::system::proc::EDITORS),
                 ("app-caches", crate::system::proc::APP_CACHES),
+                ("steam-shader", crate::system::proc::STEAM),
             ] {
                 if let Some(name) = crate::system::proc::matching_process(&processes, names) {
                     guards.insert(id, format!("{name} running"));
                 }
             }
+            match crate::system::proc::matching_process_under(
+                proc_root,
+                &["makepkg", "git"],
+                &[
+                    ctx.home.join(".cache/paru/clone"),
+                    ctx.home.join(".cache/yay"),
+                ],
+            ) {
+                Ok(Some(name)) => {
+                    guards.insert("aur-builds", format!("{name} running in an AUR checkout"));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    guards.insert("aur-builds", format!("process state unavailable: {error}"));
+                }
+            }
         }
         Err(error) => {
-            for id in ["browser-cache", "editor-cache", "app-caches"] {
+            for id in [
+                "browser-cache",
+                "editor-cache",
+                "app-caches",
+                "steam-shader",
+                "aur-builds",
+            ] {
                 guards.insert(id, format!("process state unavailable: {error}"));
             }
         }
@@ -223,10 +291,15 @@ fn process_guards(ctx: &Ctx) -> BTreeMap<&'static str, String> {
     guards
 }
 
-fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected]) -> i32 {
+fn execute_selected(
+    ctx: &Ctx,
+    results: &[scan::RuleResult],
+    items: &[Selected],
+    gate_ack: BTreeMap<String, GateAck>,
+) -> i32 {
     let plan = Plan {
         selected: build_plan_items(items, results),
-        gate_ack: std::collections::BTreeMap::new(),
+        gate_ack,
         keep_days: Some(ctx.keep_days()),
         dry_run: ctx.flags.dry_run,
         trash: ctx.flags.trash,
@@ -244,6 +317,30 @@ fn execute_selected(ctx: &Ctx, results: &[scan::RuleResult], items: &[Selected])
             3
         }
     }
+}
+
+fn caution_acknowledgements(
+    items: &[Selected],
+    results: &[scan::RuleResult],
+) -> BTreeMap<String, GateAck> {
+    let at = std::time::SystemTime::now();
+    let mut acknowledgements = BTreeMap::new();
+    for item in items {
+        let Some(result) = results.iter().find(|result| result.id == item.id) else {
+            continue;
+        };
+        if result.tier == crate::rules::Tier::Caution {
+            acknowledgements.insert(
+                item.id.to_string(),
+                GateAck {
+                    purge_typed: false,
+                    caution_confirmed: true,
+                    at,
+                },
+            );
+        }
+    }
+    acknowledgements
 }
 
 /// Whether a scan result survives `--only`/`--exclude` (CLI-UX section 2.2).

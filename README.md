@@ -9,9 +9,10 @@ cleanup is a two-key affair; the *full purge* (everything, including your entire
 
 > **Status: pre-alpha (v0.1 in development).** See [ROADMAP.md](ROADMAP.md) for
 > what works today. **`sweep scan` works** (M1: read-only measurement, table +
-> `--json`). **`sweep clean` executes the 11 safe rules** (M2), with a separate
-> coredump row that is caution-tier and unchecked by default. Interactive runs
-> use the checklist and P1 summary gate (plus P2 for selected coredumps);
+> `--json`). **`sweep clean` executes the 11 safe rules** (M2). Caution-tier
+> rows remain unchecked by default and require a per-rule P2 confirmation when
+> selected;
+> interactive runs also use the checklist and P1 summary gate;
 > `--yes`/`--no-prompt` runs are scripted;
 > `--dry-run` prints candidate samples without changing files. `--trash` stages
 > eligible paths in XDG trash and reports staged items separately from freed
