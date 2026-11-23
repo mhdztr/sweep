@@ -1,6 +1,23 @@
 # sweep
 
+[![CI](https://github.com/mhdztr/sweep/actions/workflows/ci.yml/badge.svg)](https://github.com/mhdztr/sweep/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/mhdztr/sweep)](LICENSE)
+![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange?logo=rust&logoColor=white)
+![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-yellow)
+
 **Advanced, safety-first storage cleaner for Linux, Arch-first, distro-aware everywhere.**
+
+## Contents
+
+- [Why](#why)
+- [Quickstart](#quickstart)
+- [Presets](#presets)
+- [Safety invariants (non-negotiable)](#safety-invariants-non-negotiable)
+- [Commands](#commands)
+- [Install (once v0.1 ships)](#install-once-v01-ships)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 `sweep` scans your system for reclaimable space, lets you toggle cleanup categories
 in a color-coded checklist, and cleans them behind explicit safety gates. Regular
@@ -89,6 +106,11 @@ cargo install --path .
 | [docs/CLI-UX.md](docs/CLI-UX.md) | commands, prompts, exit codes |
 | [docs/SAFETY.md](docs/SAFETY.md) | threat model, gates, sudo protocol |
 | [docs/CI-CD.md](docs/CI-CD.md) | CI, security scanning, releases, AUR packaging |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, verification gate, commit style |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: read `AGENTS.md` and `docs/SAFETY.md` first, keep `scan` and `--dry-run` non-mutating, update the spec docs in the same commit as any rule or CLI change, and run the full verification gate before proposing a change.
 
 ## License
 
